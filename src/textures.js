@@ -344,6 +344,7 @@ export const T = {
 
 const std = (o) => new THREE.MeshStandardMaterial({ roughness: 0.9, metalness: 0, ...o });
 
+// 初期値（画像の読み込み前でも動くように canvas 版を入れておく）
 export const M = {
   tatami: std({ map: T.tatami }),
   woodFloor: std({ map: T.woodFloor, roughness: 0.6 }),
@@ -361,3 +362,113 @@ export const M = {
     color: 0x1e3a42, roughness: 0.08, metalness: 0.3, transparent: true, opacity: 0.8,
   }),
 };
+
+// ---------- Higgsfield で作った素材画像 ----------
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+// 端と端がつながるように、半分ずらした画像を縁にだけ重ねる
+function seamless(img) {
+  const w = img.width, h = img.height;
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const g = c.getContext('2d');
+  g.drawImage(img, 0, 0);
+  const shifted = document.createElement('canvas');
+  shifted.width = w;
+  shifted.height = h;
+  const sg = shifted.getContext('2d');
+  for (const [dx, dy] of [[0, 0], [-w, 0], [0, -h], [-w, -h]]) sg.drawImage(img, dx + w / 2, dy + h / 2);
+  const mask = document.createElement('canvas');
+  mask.width = w;
+  mask.height = h;
+  const mg = mask.getContext('2d');
+  const md = mg.createImageData(w, h);
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const e = Math.max(Math.abs(x / w - 0.5), Math.abs(y / h - 0.5)) * 2;
+      md.data[(y * w + x) * 4 + 3] = Math.max(0, Math.min(255, ((e - 0.6) / 0.4) * 255));
+    }
+  mg.putImageData(md, 0, 0);
+  sg.globalCompositeOperation = 'destination-in';
+  sg.drawImage(mask, 0, 0);
+  g.drawImage(shifted, 0, 0);
+  return c;
+}
+
+// 欄間の彫刻：暗い透かし部分を透明にする
+function cutDark(img, threshold = 28) {
+  const c = document.createElement('canvas');
+  c.width = img.width;
+  c.height = img.height;
+  const g = c.getContext('2d');
+  g.drawImage(img, 0, 0);
+  const d = g.getImageData(0, 0, c.width, c.height);
+  for (let i = 0; i < d.data.length; i += 4) {
+    const l = 0.3 * d.data[i] + 0.59 * d.data[i + 1] + 0.11 * d.data[i + 2];
+    d.data[i + 3] = l < threshold ? 0 : 255;
+  }
+  g.putImageData(d, 0, 0);
+  return c;
+}
+
+function toTexture(source, unitW, unitH = unitW, repeat = true) {
+  const t = new THREE.Texture(source);
+  t.needsUpdate = true;
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  if (repeat) {
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(1 / unitW, 1 / unitH);
+  }
+  return t;
+}
+
+export async function initTextures() {
+  const names = ['tatami', 'wood_floor', 'plaster', 'washi', 'fusuma', 'fuji', 'mosaic', 'hinoki', 'stone_floor', 'ranma'];
+  const imgs = Object.fromEntries(
+    await Promise.all(names.map(async (n) => [n, await loadImage(`assets/textures/${n}.jpg`)])),
+  );
+
+  T.tatamiImg = toTexture(imgs.tatami, 0.9, 0.9);
+  T.woodImg = toTexture(imgs.wood_floor, 2.0, 2.0);
+  T.plasterImg = toTexture(seamless(imgs.plaster), 1.6);
+  T.washi = toTexture(seamless(imgs.washi), 0.9);
+  T.fusumaImg = toTexture(imgs.fusuma, 1, 1, false);
+  T.fuji = toTexture(imgs.fuji, 1, 1, false);
+  T.mosaic = toTexture(imgs.mosaic, 0.6);
+  T.hinoki = toTexture(imgs.hinoki, 1.2);
+  T.stoneFloor = toTexture(imgs.stone_floor, 1.6);
+  T.ranma = toTexture(cutDark(imgs.ranma), 1, 1, false);
+  T.ceilingImg = toTexture(imgs.wood_floor, 2.4, 2.4);
+
+  Object.assign(M, {
+    tatami: std({ map: T.tatamiImg, roughness: 0.85 }),
+    woodFloor: std({ map: T.woodImg, roughness: 0.32, metalness: 0.05 }),
+    plaster: std({ map: T.plasterImg, color: 0xb0a492, roughness: 0.95 }),
+    koshiita: std({ map: T.hinoki, color: 0x6e5034, roughness: 0.55 }),
+    fusuma: std({ map: T.fusumaImg, roughness: 0.7 }),
+    tile: std({ map: T.mosaic, roughness: 0.25 }),
+    mosaic: std({ map: T.mosaic, roughness: 0.25 }),
+    hinoki: std({ map: T.hinoki, roughness: 0.55 }),
+    stoneFloor: std({ map: T.stoneFloor, roughness: 0.3, metalness: 0.05 }),
+    ceiling: std({ map: T.ceilingImg, color: 0x8a7a6a, roughness: 0.8 }),
+    fuji: std({ map: T.fuji, roughness: 0.4 }),
+    ranma: std({ map: T.ranma, alphaTest: 0.5, side: THREE.DoubleSide, color: 0x9a8a7a }),
+    // 障子紙：裏から光が透けているように見せる
+    washiCool: std({ map: T.washi, emissive: 0x9fb4d6, emissiveMap: T.washi, emissiveIntensity: 0.32, side: THREE.DoubleSide }),
+    washiWarm: std({ map: T.washi, emissive: 0xffc888, emissiveMap: T.washi, emissiveIntensity: 0.45, side: THREE.DoubleSide }),
+    washiDark: std({ map: T.washi, color: 0xb8b0a0, side: THREE.DoubleSide }),
+    shojiWood: std({ color: 0xa88a62, roughness: 0.6 }),
+    agedWood: std({ color: 0x5a3c22, roughness: 0.55 }),
+    darkWood: std({ color: 0x24160b, roughness: 0.45 }),
+    lacquer: std({ color: 0x0c0806, roughness: 0.25 }),
+  });
+}

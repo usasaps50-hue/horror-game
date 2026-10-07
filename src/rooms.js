@@ -5,60 +5,9 @@ const STUDENT_COLORS = [0x2a3a6a, 0x6a2a2a, 0x2a5a3a, 0x3a3a3a, 0xc8a83a, 0x5a3a
 
 export const ROOM_TYPES = {
   // ===== 固定の部屋 =====
-  genkan: {
-    name: '玄関',
-    floor: 'wood',
-    build(c) {
-      c.wall(P.welcomeBoard(), c.free[0] || 'w', 0.55, 0.35);
-      const shoeSide = c.free[1] || c.free[0] || 'e';
-      c.wall(P.getabako(2.2), shoeSide, -0.4, 0.22, true);
-      const [x1, z1] = c.corners[0];
-      c.put(P.tanuki(), x1, z1, c.R.range(0, 6));
-      const [x2, z2] = c.corners[1];
-      c.put(P.umbrellaStand(c.R), x2, z2);
-      // スリッパがきちんと並んでいる（数足だけ乱れている）
-      for (let i = 0; i < 8; i++) {
-        const s = P.slippers();
-        const messy = c.R.chance(0.25);
-        c.put(s, -1.6 + i * 0.45 + (messy ? c.R.range(-0.2, 0.2) : 0), 1.2 + (messy ? c.R.range(-0.3, 0.3) : 0), messy ? c.R.range(-1, 1) : Math.PI);
-      }
-      c.hang(P.chochin(), 0, 0);
-    },
-  },
-
-  rouka: {
-    name: '廊下',
-    floor: 'wood',
-    corridor: true,
-    build(c) {
-      c.hang(P.chochin(c.R.chance(0.8)), c.R.range(-1.5, 1.5), c.R.range(-1.5, 1.5));
-      if (c.free.length) {
-        const side = c.free[0];
-        if (c.R.chance(0.5)) c.wall(P.andon(), side, 0.6, 0.3);
-        else {
-          c.wall(P.lowTable(0.5, 0.35, 0.6), side, -0.5, 0.25, true);
-          c.wall(P.jar(c.R), side, -0.5, 0.25).position.y = 0.6;
-        }
-      }
-    },
-  },
-
-  engawa: {
-    name: '縁側',
-    floor: 'wood',
-    corridor: true,
-    build(c) {
-      const side = c.free[0];
-      if (side) {
-        c.window(side);
-        c.wall(P.chairSet(), side, 0.5, 0.9, true);
-      }
-      c.hang(P.chochin(c.R.chance(0.6)), 0, 0);
-    },
-  },
-
   oku: {
     name: '奥の間',
+    plate: "奥の間",
     floor: 'tatami',
     build(c) {
       const back = c.back; // 入口の反対側
@@ -78,6 +27,7 @@ export const ROOM_TYPES = {
   // ===== ランダムに出てくる部屋 =====
   kyakushitsu: {
     name: '客室「桔梗の間」',
+    plate: "桔梗の間",
     floor: 'tatami',
     build(c) {
       c.put(P.lowTable(), 0, 0, 0, true);
@@ -95,6 +45,7 @@ export const ROOM_TYPES = {
 
   oobeya: {
     name: '大部屋（二年三組）',
+    plate: "二年三組",
     floor: 'tatami',
     build(c) {
       // 修学旅行らしく布団がずらっと並んでいる
@@ -112,6 +63,7 @@ export const ROOM_TYPES = {
 
   enkaijo: {
     name: '宴会場',
+    plate: "宴会場",
     floor: 'tatami',
     build(c) {
       for (const z of [-1.3, 1.3]) {
@@ -128,46 +80,10 @@ export const ROOM_TYPES = {
     },
   },
 
-  datsuijo: {
-    name: '脱衣所',
-    floor: 'wood',
-    build(c) {
-      const [s1, s2] = c.free;
-      if (s1) {
-        const sh = P.fillShelf(P.shelf(2.4, 1.6, 0.42, 3), c.R, 2.4, 0.42, (R) => (R.chance(0.8) ? P.basket() : null));
-        c.wall(sh, s1, 0, 0.22, true);
-      }
-      if (s2) {
-        c.wall(P.counter(2.4, 0.8, 0.5, 0xd8d0c0), s2, 0, 0.25, true);
-        const mirror = P.washStation();
-        c.wall(mirror, s2, 0, 0.12).position.y = 0.3;
-      }
-      const [x, z] = c.corners[0];
-      c.put(P.fan(), x, z, c.R.range(0, 6));
-      const [sx, sz] = c.corners[1];
-      c.put(P.scale(), sx, sz);
-      c.hang(P.chochin(false), 0, 0);
-    },
-  },
-
-  ofuro: {
-    name: '大浴場',
-    floor: 'tile',
-    build(c) {
-      c.put(P.tub(3.6, 2.6), 0, 0, 0, true);
-      for (const side of c.free.slice(0, 2))
-        for (const t of [-0.6, 0, 0.6]) c.wall(P.washStation(), side, t, 0.3);
-      for (let i = 0; i < 3; i++) {
-        const [x, z] = c.corners[i];
-        c.put(P.washStation(), x * 0.95, z * 0.95, c.R.range(0, 6)).children.slice(0, 2).forEach((m) => (m.visible = false));
-      }
-      c.lamp(0, 0, 0x88aacc, 2.2);
-    },
-  },
-
   chubo: {
     name: '厨房',
-    floor: 'tile',
+    plate: "厨房",
+    floor: 'stone',
     build(c) {
       const [s1, s2] = c.free;
       if (s1) {
@@ -187,6 +103,7 @@ export const ROOM_TYPES = {
 
   chouba: {
     name: '帳場',
+    plate: "帳場",
     floor: 'wood',
     build(c) {
       const side = c.free[0] || 'n';
@@ -202,6 +119,7 @@ export const ROOM_TYPES = {
 
   baiten: {
     name: '売店',
+    plate: "売店",
     floor: 'wood',
     build(c) {
       for (const side of c.free.slice(0, 2)) {
@@ -220,6 +138,7 @@ export const ROOM_TYPES = {
 
   yugijo: {
     name: '遊技場',
+    plate: "遊技場",
     floor: 'wood',
     build(c) {
       c.put(P.pingPong(), 0, 0, c.R.pick([0, Math.PI / 2]), true);
@@ -232,6 +151,7 @@ export const ROOM_TYPES = {
 
   butsuma: {
     name: '仏間',
+    plate: "仏間",
     floor: 'tatami',
     build(c) {
       const side = c.free[0] || c.back;
@@ -245,6 +165,7 @@ export const ROOM_TYPES = {
 
   zashiki: {
     name: '座敷「鶴の間」',
+    plate: "鶴の間",
     floor: 'tatami',
     build(c) {
       if (c.free[0]) c.wall(P.tokonoma(), c.free[0], 0, 0.4, true);
@@ -258,6 +179,7 @@ export const ROOM_TYPES = {
 
   futonbeya: {
     name: '布団部屋',
+    plate: "布団部屋",
     floor: 'tatami',
     build(c) {
       for (const side of c.free.slice(0, 2))
@@ -276,6 +198,7 @@ export const ROOM_TYPES = {
 
   nakaniwa: {
     name: '中庭',
+    plate: "中庭",
     floor: 'gravel',
     noCeiling: true,
     build(c) {
@@ -298,6 +221,7 @@ export const ROOM_TYPES = {
 
   monooki: {
     name: '物置',
+    plate: "物置",
     floor: 'wood',
     build(c) {
       for (const side of c.free.slice(0, 2)) {
@@ -318,6 +242,7 @@ export const ROOM_TYPES = {
 
   chashitsu: {
     name: '茶室',
+    plate: "茶室",
     floor: 'tatami',
     build(c) {
       c.put(P.hearth(), 0, 0, 0, true);
@@ -330,6 +255,7 @@ export const ROOM_TYPES = {
 
   okami: {
     name: '女将の部屋',
+    plate: "女将",
     floor: 'tatami',
     build(c) {
       const [s1, s2] = c.free;
@@ -348,6 +274,7 @@ export const ROOM_TYPES = {
 
   ningyo: {
     name: '人形の間',
+    plate: "人形の間",
     floor: 'tatami',
     build(c) {
       const side = c.free[0] || c.back;
@@ -364,6 +291,6 @@ export const ROOM_TYPES = {
 };
 
 export const RANDOM_POOL = [
-  'kyakushitsu', 'oobeya', 'enkaijo', 'datsuijo', 'ofuro', 'chubo', 'chouba', 'baiten',
-  'yugijo', 'butsuma', 'zashiki', 'futonbeya', 'nakaniwa', 'monooki', 'chashitsu', 'okami', 'ningyo',
+  'kyakushitsu', 'enkaijo', 'chubo', 'chouba', 'baiten', 'yugijo', 'butsuma',
+  'zashiki', 'futonbeya', 'nakaniwa', 'monooki', 'chashitsu', 'okami', 'ningyo', 'oobeya',
 ];
