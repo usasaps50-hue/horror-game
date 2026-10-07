@@ -116,8 +116,8 @@ export function glassDoor(w, h) {
 
 // のれん（「湯」）
 let _norenTex;
-function norenTexture() {
-  if (_norenTex) return _norenTex;
+function norenTexture(text = 'ゆ') {
+  if (_norenTex && _norenTex.userData.text === text) return _norenTex;
   const c = document.createElement('canvas');
   c.width = 512;
   c.height = 384;
@@ -132,16 +132,17 @@ function norenTexture() {
   g.font = 'bold 230px "Hiragino Mincho ProN", "Yu Mincho", serif';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.fillText('ゆ', 256, 200);
+  g.fillText(text, 256, 200);
   _norenTex = new THREE.CanvasTexture(c);
+  _norenTex.userData.text = text;
   _norenTex.colorSpace = THREE.SRGBColorSpace;
   return _norenTex;
 }
 
-export function noren(w, h = 0.9) {
+export function noren(w, h = 0.9, text = 'ゆ') {
   const g = new THREE.Group();
   g.userData.dynamic = true;
-  const tex = norenTexture();
+  const tex = norenTexture(text);
   const n = 3;
   const sw = w / n;
   const strips = [];
@@ -217,6 +218,18 @@ export function wallRun(bays, ctx) {
       hit.visible = false;
       hit.userData.colliderOnly = true;
       g.add(solid(hit));
+    } else if (b.type === 'glass') {
+      mbox(inner + 0.05, 0.035, WT + 0.02, M.agedWood, uc, 0, 0, g);
+      const pw = inner / 2 + 0.025;
+      for (const [k, z] of [[-1, 0.022], [1, -0.022]]) {
+        const p = glassDoor(pw, KAMOI - 0.035);
+        p.position.set(uc + (k * (inner - pw)) / 2, 0.035, z);
+        g.add(p);
+      }
+      const hit = new THREE.Mesh(new THREE.BoxGeometry(inner, KAMOI, WT));
+      hit.position.set(uc, KAMOI / 2, 0);
+      hit.visible = false;
+      g.add(solid(hit));
     } else if (b.type === 'door' || b.type === 'noren') {
       mbox(inner + 0.05, 0.02, WT + 0.02, M.agedWood, uc, 0, 0, g);
     }
@@ -260,9 +273,16 @@ export function wallRun(bays, ctx) {
       hit.visible = false;
       hit.userData.doorCollider = door;
       g.add(hit);
+      const pick = new THREE.Mesh(new THREE.BoxGeometry(inner, KAMOI, 0.5), new THREE.MeshBasicMaterial());
+      pick.position.set(uc, KAMOI / 2, 0);
+      pick.visible = false;
+      pick.userData.dynamic = true;
+      pick.userData.door = door;
+      g.add(pick);
+      ctx.interactables.push(pick);
     }
     if (b.type === 'noren') {
-      const n = noren(inner + 0.02, 0.85);
+      const n = noren(inner + 0.02, 0.85, b.text ?? 'ゆ');
       n.position.set(uc, KAMOI, 0.09);
       g.add(n);
       ctx.updaters.push(n);

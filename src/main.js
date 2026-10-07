@@ -1,20 +1,27 @@
 import * as THREE from 'three';
-import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { mulberry32, makeRandom } from './rng.js';
 import { initTextures } from './textures.js';
-import { mergeStatic, transformBox } from './geo.js';
-import { W, BAY } from './architecture.js';
-import { buildSegment, NEXT, PREV, L } from './corridor.js';
-import { ROOM_TYPES, RANDOM_POOL } from './rooms.js';
+import { buildRyokan } from './building.js';
+import { P } from './layout.js';
+
+// ---------- 設定（ブラウザに保存） ----------
+const DEFAULTS = { sensitivity: 1.0, fov: 70, brightness: 1.0, invertY: false };
+const settings = { ...DEFAULTS };
+try {
+  Object.assign(settings, JSON.parse(localStorage.getItem('zashiki-settings') || '{}'));
+} catch {}
+const saveSettings = () => {
+  try {
+    localStorage.setItem('zashiki-settings', JSON.stringify(settings));
+  } catch {}
+};
 
 // ---------- シード ----------
 const params = new URLSearchParams(location.search);
 const seed = Number(params.get('seed')) || Math.floor(Math.random() * 1e9);
-const runR = makeRandom(mulberry32(seed));
-const GOAL_LAP = runR.int(6, 8);
+const R = makeRandom(mulberry32(seed));
 
 // ---------- 描画まわり ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -23,20 +30,18 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x020203);
-scene.fog = new THREE.FogExp2(0x040405, 0.06);
+scene.fog = new THREE.FogExp2(0x040405, 0.055);
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.07;
 
-const camera = new THREE.PerspectiveCamera(68, innerWidth / innerHeight, 0.05, 60);
+const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.05, 80);
 camera.rotation.order = 'YXZ';
 scene.add(camera);
 scene.add(new THREE.HemisphereLight(0x34445e, 0x100a06, 0.3));
-// 鏡や床にうっすら映り込みを出すための環境マップ（明るさはごく弱く）
-scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
-scene.environmentIntensity = 0.07;
 
 const flashlight = new THREE.SpotLight(0xfff0d8, 24, 20, 0.45, 0.55, 1.5);
 flashlight.castShadow = true;
@@ -56,164 +61,110 @@ for (let i = 0; i < POOL; i++) {
   pool.push(l);
 }
 
-const loadingEl = document.getElementById('loading');
+function applySettings() {
+  camera.fov = settings.fov;
+  camera.updateProjectionMatrix();
+  renderer.toneMappingExposure = settings.brightness;
+}
+applySettings();
 
 // ---------- 読み込み ----------
 await initTextures();
 const gltf = await new GLTFLoader().loadAsync('assets/models/zashiki_warashi.glb');
-gltf.scene.traverse((o) => {
-  if (o.isMesh) {
-    o.castShadow = true;
-    o.receiveShadow = true;
-  }
-});
-const assets = { zashiki: () => SkeletonUtils.clone(gltf.scene) };
-loadingEl.remove();
+const world = buildRyokan(R);
+scene.add(world.root);
 
-// ---------- 周回の中身 ----------
-const ANOMALIES = ['lampsOff', 'temari', 'dolls', 'ofuda', 'slippers', 'futon', 'footprints', 'shadow', 'redLamps', 'locked', 'doorsOpen'];
-
-function planFor(lap) {
-  const R = makeRandom(mulberry32((seed ^ Math.imul(lap + 1000, 2654435761)) >>> 0));
-  const pool = R.shuffle(RANDOM_POOL.filter((t) => t !== 'oobeya'));
-  const rooms = {
-    L1: lap === 1 ? 'oobeya' : pool.pop(),
-    L2: 'bath',
-    L3: 'bath',
-    R2: pool.pop(),
-    R3: pool.pop(),
-  };
-  let anomalies = [];
-  if (lap >= 2) {
-    const n = Math.min(4, 1 + Math.floor((lap - 2) / 2));
-    anomalies = R.shuffle(ANOMALIES).slice(0, n);
-    if (lap >= 4 && R.chance(0.6)) anomalies.push('zashikiFar');
-    if (lap >= GOAL_LAP - 1) anomalies.push('plates', 'lampsOff');
-    if (lap === GOAL_LAP) anomalies = anomalies.filter((a) => a !== 'zashikiFar' && a !== 'locked');
-  }
-  return { lap, rooms, anomalies, goal: lap === GOAL_LAP, R };
-}
-
-const segCache = new Map();
-function getSegment(lap) {
-  if (segCache.has(lap)) return segCache.get(lap);
-  const plan = planFor(lap);
-  const seg = buildSegment(plan, plan.R, assets);
-  const root = seg.root;
-  root.updateMatrixWorld(true);
-  // 当たり判定・灯り・出現位置をローカル座標で記録してから、形をまとめる
-  seg.colliders = [];
-  const box = new THREE.Box3();
-  root.traverse((o) => {
-    if (o.userData.solid) {
-      box.setFromObject(o);
-      seg.colliders.push({ minX: box.min.x + 0.03, maxX: box.max.x - 0.03, minZ: box.min.z + 0.03, maxZ: box.max.z - 0.03 });
-    }
-    if (o.userData.doorCollider) {
-      box.setFromObject(o);
-      seg.colliders.push({ minX: box.min.x, maxX: box.max.x, minZ: box.min.z, maxZ: box.max.z, door: o.userData.doorCollider });
+if (world.spawns.zashiki) {
+  const m = gltf.scene;
+  m.traverse((o) => {
+    if (o.isMesh) {
+      o.castShadow = true;
+      o.receiveShadow = true;
     }
   });
-  seg.lights = [];
-  root.traverse((o) => {
-    if (o.userData.light) seg.lights.push({ pos: o.getWorldPosition(new THREE.Vector3()), ...o.userData.light, phase: Math.random() * 100 });
-  });
-  mergeStatic(root);
-  for (const { name, obj } of seg.spawnMarkers) {
-    if (name !== 'zashiki') continue;
-    const m = gltf.scene; // 奥の間には本体（アニメーションつき）を置く
-    m.position.copy(obj.getWorldPosition(new THREE.Vector3()));
-    m.quaternion.copy(obj.getWorldQuaternion(new THREE.Quaternion()));
-    root.add(m);
-    seg.mixer = new THREE.AnimationMixer(m);
-    if (gltf.animations[0]) seg.mixer.clipAction(gltf.animations[0]).play();
-  }
-  segCache.set(lap, seg);
-  return seg;
+  m.position.copy(world.spawns.zashiki.pos);
+  m.quaternion.copy(world.spawns.zashiki.quat);
+  scene.add(m);
 }
-
-let lap = 1;
-let active = []; // { seg, matrix }
-let colliders = [], lights = [], interactables = [];
-
-function placeSegments() {
-  const cur = getSegment(lap);
-  const wanted = [{ seg: cur, matrix: new THREE.Matrix4() }];
-  wanted.push({ seg: getSegment(lap - 1), matrix: PREV });
-  if (!cur.plan.goal) wanted.push({ seg: getSegment(lap + 1), matrix: NEXT });
-
-  for (const a of active) scene.remove(a.seg.root);
-  active = wanted;
-  colliders = [];
-  lights = [];
-  interactables = [];
-  for (const { seg, matrix } of active) {
-    seg.root.matrixAutoUpdate = false;
-    seg.root.matrix.copy(matrix);
-    scene.add(seg.root);
-    for (const c of seg.colliders) colliders.push(transformBox(c, matrix));
-    for (const l of seg.lights) lights.push({ ...l, pos: l.pos.clone().applyMatrix4(matrix) });
-    interactables.push(...seg.interactables);
-  }
-  scene.updateMatrixWorld(true);
-  lightTimer = 0;
-
-  // 使わなくなった区間を片づける
-  for (const [k, seg] of segCache) {
-    if (Math.abs(k - lap) <= 2) continue;
-    seg.root.traverse((o) => o.geometry?.dispose());
-    segCache.delete(k);
-  }
-  document.getElementById('lap').textContent = `seed ${seed}`;
-}
+const mixer = new THREE.AnimationMixer(gltf.scene);
+if (gltf.animations[0]) mixer.clipAction(gltf.animations[0]).play();
+document.getElementById('loading').remove();
+document.getElementById('seed').textContent = `seed ${seed}`;
 
 // ---------- プレイヤー ----------
 const EYE = 1.5;
 const RADIUS = 0.26;
-camera.position.set(-0.3, EYE, -(3 * BAY + BAY / 2) + 0.4);
-camera.rotation.y = 0;
+camera.position.copy(world.start.pos).setY(EYE);
+let yaw = world.start.yaw;
+let pitch = 0;
 
-const controls = new PointerLockControls(camera, document.body);
 const overlay = document.getElementById('overlay');
-overlay.addEventListener('click', () => controls.lock());
-controls.addEventListener('lock', () => overlay.classList.add('hidden'));
-controls.addEventListener('unlock', () => overlay.classList.remove('hidden'));
+const startBtn = document.getElementById('start');
+let locked = false;
+startBtn.addEventListener('click', () => renderer.domElement.requestPointerLock());
+document.addEventListener('pointerlockchange', () => {
+  locked = document.pointerLockElement === renderer.domElement;
+  overlay.classList.toggle('hidden', locked);
+  startBtn.textContent = 'つづける';
+});
+document.addEventListener('mousemove', (e) => {
+  if (!locked) return;
+  const k = 0.0022 * settings.sensitivity;
+  yaw -= e.movementX * k;
+  pitch -= e.movementY * k * (settings.invertY ? -1 : 1);
+  pitch = Math.max(-1.45, Math.min(1.45, pitch));
+});
+
+// 設定パネル
+for (const [id, key, fmt] of [
+  ['s-sens', 'sensitivity', (v) => v.toFixed(2)],
+  ['s-fov', 'fov', (v) => `${v}°`],
+  ['s-bright', 'brightness', (v) => v.toFixed(2)],
+]) {
+  const input = document.getElementById(id);
+  const out = document.getElementById(`${id}-v`);
+  input.value = settings[key];
+  out.textContent = fmt(settings[key]);
+  input.addEventListener('input', () => {
+    settings[key] = Number(input.value);
+    out.textContent = fmt(settings[key]);
+    applySettings();
+    saveSettings();
+  });
+}
+const inv = document.getElementById('s-inv');
+inv.checked = settings.invertY;
+inv.addEventListener('change', () => {
+  settings.invertY = inv.checked;
+  saveSettings();
+});
+document.getElementById('s-reset').addEventListener('click', () => {
+  Object.assign(settings, DEFAULTS);
+  saveSettings();
+  location.reload();
+});
 
 const keys = new Set();
 addEventListener('keydown', (e) => {
   keys.add(e.code);
+  if (!locked) return;
   if (e.code === 'KeyE') interact();
   if (e.code === 'KeyF') {
     flashOn = !flashOn;
     flashlight.visible = flashOn;
   }
-  if (e.code === 'KeyR') location.search = `?seed=${Math.floor(Math.random() * 1e9)}`;
+  if (e.code === 'KeyM') minimap.classList.toggle('hidden');
+  if (e.code === 'KeyR' && e.shiftKey) location.search = `?seed=${Math.floor(Math.random() * 1e9)}`;
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
 
+const overlaps = (c, x, z, r) => x + r > c.minX && x - r < c.maxX && z + r > c.minZ && z - r < c.maxZ;
 function blocked(x, z) {
-  for (const c of colliders) {
+  for (const c of world.colliders) {
     if (c.door && c.door.t > 0.75) continue;
-    if (x + RADIUS > c.minX && x - RADIUS < c.maxX && z + RADIUS > c.minZ && z - RADIUS < c.maxZ) return true;
+    if (overlaps(c, x, z, RADIUS)) return true;
   }
   return false;
-}
-
-// 区間の境目をこえたら、座標ごと隣の区間に入れかえる（見た目は同じなので気づかない）
-function checkLoop() {
-  const p = camera.position;
-  const cur = getSegment(lap);
-  if (!cur.plan.goal && p.x > W / 2 + 0.3 && p.z < -L) {
-    p.applyMatrix4(PREV);
-    camera.rotation.y += Math.PI / 2;
-    lap++;
-    placeSegments();
-  } else if (p.z > 0.3) {
-    p.applyMatrix4(NEXT);
-    camera.rotation.y -= Math.PI / 2;
-    lap--;
-    placeSegments();
-  }
 }
 
 // ---------- 戸 ----------
@@ -221,24 +172,32 @@ const ray = new THREE.Raycaster();
 ray.far = 2.4;
 let target = null;
 const prompt = document.getElementById('prompt');
+const center = new THREE.Vector2(0, 0);
 
 function updateTarget() {
-  ray.setFromCamera(new THREE.Vector2(0, 0), camera);
-  const hit = ray.intersectObjects(interactables, true)[0];
+  camera.updateMatrixWorld();
+  ray.setFromCamera(center, camera);
+  const hit = ray.intersectObjects(world.interactables, true)[0];
   target = hit ? hit.object : null;
   const door = target?.userData.door;
-  if (!door) prompt.textContent = '';
-  else if (door.locked && !door.open) prompt.textContent = 'E　開ける';
-  else prompt.textContent = door.open ? 'E　閉める' : 'E　開ける';
+  if (door) prompt.textContent = door.open ? 'E　閉める' : 'E　開ける';
+  else if (target?.userData.note) prompt.textContent = 'E　調べる';
+  else prompt.textContent = '';
 }
 
 function interact() {
-  const door = target?.userData.door;
+  if (!target) return;
+  if (target.userData.note) return toast(target.userData.note);
+  const door = target.userData.door;
   if (!door) return;
   if (door.locked && !door.open) {
-    toast(door.locked);
     door.rattle = 0.4;
-    return;
+    return toast(door.locked);
+  }
+  if (door.open) {
+    // 戸口に立っていると閉められない（閉じこめられないように）
+    const c = world.colliders.find((x) => x.door === door);
+    if (c && overlaps(c, camera.position.x, camera.position.z, RADIUS)) return;
   }
   door.open = !door.open;
 }
@@ -253,28 +212,50 @@ function toast(text, ms = 2200) {
   toastTimer = setTimeout(() => toastEl.classList.remove('show'), ms);
 }
 
-let currentPlace = null;
+const inRect = (r, x, z) => x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1;
+const visitedRooms = new Set();
+const visitedCorr = new Set();
+let currentRoom = null;
 let goalShown = false;
 function updatePlace() {
-  const p = camera.position;
-  const plan = getSegment(lap).plan;
-  let place = 'corridor';
-  if (p.z < -L - W - 0.1) place = 'oku';
-  else if (Math.abs(p.x) > W / 2 + 0.15 && p.z > -L) {
-    const side = p.x < 0 ? 'L' : 'R';
-    const idx = Math.floor(-p.z / BAY);
-    const n = idx >= 11 ? 3 : idx >= 6 ? 2 : 1;
-    place = plan.rooms[side + n] || 'corridor';
-  }
-  if (place === currentPlace) return;
-  currentPlace = place;
-  if (place === 'corridor') return;
-  if (place === 'bath') toast(p.z < -17.6 ? '大浴場' : '脱衣所');
-  else toast(ROOM_TYPES[place].name);
-  if (place === 'oku' && !goalShown) {
+  const { x, z } = camera.position;
+  const room = world.rooms.find((r) => inRect(r, x, z)) || null;
+  world.corridors.forEach((c) => inRect(c, x, z) && visitedCorr.add(c));
+  if (room === currentRoom) return;
+  currentRoom = room;
+  if (!room) return;
+  visitedRooms.add(room);
+  toast(room.def.name);
+  if (room.type === 'oku' && !goalShown) {
     goalShown = true;
     setTimeout(() => document.getElementById('goal').classList.add('show'), 3000);
   }
+}
+
+const minimap = document.getElementById('minimap');
+const mm = minimap.getContext('2d');
+function drawMinimap() {
+  const W = minimap.width;
+  const ext = (Math.max(world.layout.NX, world.layout.NY) + 0.2) * P;
+  const s = W / ext;
+  const o = 0.1 * P;
+  mm.clearRect(0, 0, W, W);
+  mm.fillStyle = 'rgba(200,190,160,0.28)';
+  for (const c of visitedCorr) mm.fillRect((c.x0 + o) * s, (c.z0 + o) * s, (c.x1 - c.x0) * s, (c.z1 - c.z0) * s);
+  for (const r of visitedRooms) {
+    mm.fillStyle = r.type === 'oku' ? 'rgba(170,20,20,0.7)' : r === currentRoom ? 'rgba(230,210,170,0.55)' : 'rgba(200,190,160,0.35)';
+    mm.fillRect((r.x0 + o) * s + 1, (r.z0 + o) * s + 1, (r.x1 - r.x0) * s - 2, (r.z1 - r.z0) * s - 2);
+  }
+  const px = (camera.position.x + o) * s, pz = (camera.position.z + o) * s;
+  mm.fillStyle = '#fff';
+  mm.beginPath();
+  mm.arc(px, pz, 3, 0, Math.PI * 2);
+  mm.fill();
+  mm.strokeStyle = '#fff';
+  mm.beginPath();
+  mm.moveTo(px, pz);
+  mm.lineTo(px - Math.sin(yaw) * 10, pz - Math.cos(yaw) * 10);
+  mm.stroke();
 }
 
 // ---------- メインループ ----------
@@ -282,7 +263,6 @@ const clock = new THREE.Clock();
 const fwd = new THREE.Vector3();
 const right = new THREE.Vector3();
 const tmp = new THREE.Vector3();
-const inv = new THREE.Matrix4();
 let bob = 0;
 let lightTimer = 0;
 let assigned = [];
@@ -290,13 +270,12 @@ let elapsed = 0;
 
 function update(dt) {
   elapsed += dt;
-  if (controls.isLocked) {
-    camera.getWorldDirection(fwd);
-    fwd.y = 0;
-    fwd.normalize();
-    right.crossVectors(fwd, camera.up);
+  camera.rotation.set(pitch, yaw, 0);
+  if (locked) {
+    fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw));
+    right.set(Math.cos(yaw), 0, -Math.sin(yaw));
     const run = keys.has('ShiftLeft') || keys.has('ShiftRight');
-    const speed = run ? 3.4 : 1.8;
+    const speed = run ? 3.6 : 1.9;
     let mx = 0, mz = 0;
     if (keys.has('KeyW') || keys.has('ArrowUp')) { mx += fwd.x; mz += fwd.z; }
     if (keys.has('KeyS') || keys.has('ArrowDown')) { mx -= fwd.x; mz -= fwd.z; }
@@ -313,11 +292,10 @@ function update(dt) {
     }
     camera.position.y = EYE + Math.sin(bob) * 0.022;
   }
-  checkLoop();
 
-  for (const { seg } of active) {
-    for (const d of seg.doors) {
-      const goal = d.open ? 1 : 0;
+  for (const d of world.doors) {
+    const goal = d.open ? 1 : 0;
+    if (d.t !== goal || d.rattle > 0) {
       d.t += Math.sign(goal - d.t) * Math.min(Math.abs(goal - d.t), dt * 2.2);
       d.panel.position.copy(d.base).addScaledVector(d.axis, d.t * d.dist);
       if (d.rattle > 0) {
@@ -325,21 +303,19 @@ function update(dt) {
         d.panel.position.addScaledVector(d.axis, Math.sin(d.rattle * 60) * 0.008);
       }
     }
-    inv.copy(seg.root.matrix).invert();
-    const local = camera.position.clone().applyMatrix4(inv);
-    for (const u of seg.updaters) {
-      let near = 0;
-      if (u.isObject3D) near = u.getWorldPosition(tmp).distanceTo(camera.position) < 1.1 ? 1 : 0;
-      u.userData.update(dt, elapsed, near, local);
-    }
-    seg.mixer?.update(dt);
   }
+  for (const u of world.updaters) {
+    let near = 0;
+    if (u.isObject3D) near = u.getWorldPosition(tmp).distanceTo(camera.position) < 1.1 ? 1 : 0;
+    u.userData.update(dt, elapsed, near);
+  }
+  mixer.update(dt);
 
   lightTimer -= dt;
   if (lightTimer <= 0) {
     lightTimer = 0.2;
     const p = camera.position;
-    assigned = lights
+    assigned = world.lights
       .map((l) => ({ l, d: l.pos.distanceToSquared(p) }))
       .sort((a, b) => a.d - b.d)
       .slice(0, POOL)
@@ -359,9 +335,9 @@ function update(dt) {
 
   updateTarget();
   updatePlace();
+  if (!minimap.classList.contains('hidden')) drawMinimap();
 }
 
-placeSegments();
 renderer.setAnimationLoop(() => {
   update(Math.min(clock.getDelta(), 0.05));
   renderer.render(scene, camera);
@@ -375,10 +351,12 @@ addEventListener('resize', () => {
 
 // デバッグ用
 window.__game = {
-  scene, camera, controls, seed, renderer, GOAL_LAP,
-  get lap() { return lap; },
-  set lap(v) { lap = v; placeSegments(); },
-  get colliders() { return colliders; },
-  active: () => active,
+  world, scene, camera, renderer, seed, settings,
+  setView(x, z, y, p = 0) {
+    camera.position.set(x, EYE, z);
+    yaw = y;
+    pitch = p;
+  },
+  interact: () => interact(),
   step: (dt = 0.016) => { update(dt); renderer.render(scene, camera); },
 };

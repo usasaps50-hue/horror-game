@@ -1,6 +1,5 @@
-// 大浴場：のれん → 脱衣所 → すりガラスの戸 → 浴場
-// ローカル座標：x ∈ [-8, 8], z ∈ [-4, 4]。z = -4 が廊下側の壁（廊下が作る）。
-// 脱衣所は x ∈ [0, 8]（入口は x = 4）、浴場は x ∈ [-8, 0]。
+// 大浴場（12m 四方の区画）：のれん → 脱衣所 → すりガラスの戸 → 浴場
+// ローカル座標：入口は z = -hd の壁の真ん中。脱衣所が手前、浴場が奥。
 import * as THREE from 'three';
 import { M, T } from './textures.js';
 import { mbox, mergedMesh } from './geo.js';
@@ -75,7 +74,7 @@ function washStation(R, withShower = true) {
   const g = new THREE.Group();
   const chrome = P.mat(0xc8ccd0, { metalness: 0.9, roughness: 0.15 });
   // 鏡（少し曇っている）
-  P.box(0.5, 0.6, 0.02, P.mat(0x9aa6aa, { metalness: 0.85, roughness: 0.35 }), 0, 0.68, 0.02, g);
+  P.box(0.5, 0.6, 0.02, P.mat(0x9aa6aa, { metalness: 0.85, roughness: 0.35, envMapIntensity: 7 }), 0, 0.68, 0.02, g);
   P.box(0.54, 0.64, 0.015, M.darkWood, 0, 0.66, 0.005, g);
   // 棚とシャンプー
   P.box(0.5, 0.025, 0.12, P.mat(0xd8d4cc), 0, 0.58, 0.08, g);
@@ -106,58 +105,51 @@ function washStation(R, withShower = true) {
   return g;
 }
 
-export function buildBath(g, R, ctx) {
-  // ---------- 床・天井 ----------
-  mbox(8, 0.05, 8, M.woodFloor, 4, -0.05, 0, g);
-  mbox(8, 0.05, 8, M.stoneFloor, -4, -0.05, 0, g);
-  ceiling(16, 8, 0, 0, g);
+export function buildBath(g, R, c) {
+  const { hw, hd } = c;
+  const zp = -hd + 4.6; // 仕切りの位置
 
-  // ---------- 壁 ----------
-  const place = (w, x, z, ry) => {
-    w.position.set(x, 0, z);
-    w.rotation.y = ry;
+  // ---------- 床・内装 ----------
+  mbox(hw * 2, 0.05, zp + hd, M.woodFloor, 0, -0.05, (zp - hd) / 2, g);
+  mbox(hw * 2, 0.05, hd - zp, M.stoneFloor, 0, -0.05, (zp + hd) / 2, g);
+  // 浴場の壁：下はタイル、上はひのきの板（部屋の壁の内側に貼る）
+  for (const [x, z, w, d] of [[-hw + 0.02, (zp + hd) / 2, 0.03, hd - zp], [hw - 0.02, (zp + hd) / 2, 0.03, hd - zp]]) {
+    mbox(w, 1.3, d, M.mosaic, x, 0, z, g);
+    mbox(w, H - 1.3, d, M.hinoki, x, 1.3, z, g);
+  }
+  // 脱衣所の壁：腰板
+  for (const [x, z, w, d] of [[-hw + 0.02, (zp - hd) / 2, 0.03, zp + hd], [hw - 0.02, (zp - hd) / 2, 0.03, zp + hd]]) mbox(w, 1.1, d, M.hinoki, x, 0, z, g);
+
+  // 仕切り（z = zp）：すりガラスの引き戸
+  const dw = 1.4;
+  const side = (hw * 2 - dw) / 2;
+  for (const sx of [-1, 1]) {
+    const w = plainWall(side, M.mosaic, M.hinoki);
+    w.position.set(sx < 0 ? -hw : dw / 2, 0, zp);
     g.add(w);
-  };
-  place(plainWall(8, M.hinoki), 0, 3.97, 0); // 脱衣所の奥
-  place(plainWall(8, M.mosaic, M.mosaic), -8, 3.97, 0); // 浴場の奥（壁画の下地）
-  place(plainWall(8, M.mosaic, M.hinoki), -7.97, 4, Math.PI / 2);
-  place(plainWall(8, M.hinoki), 7.97, 4, Math.PI / 2);
-
-  // 仕切り（x = 0）：すりガラスの引き戸
-  const d0 = 0.3, d1 = 1.7;
-  place(plainWall(d0 + 4, M.mosaic), 0, d0, Math.PI / 2);
-  place(plainWall(4 - d1, M.mosaic), 0, 4, Math.PI / 2);
-  mbox(0.1, H - KAMOI, d1 - d0, M.hinoki, 0, KAMOI, (d0 + d1) / 2, g);
-  mbox(0.12, 0.03, d1 - d0, M.hinoki, 0, 0, (d0 + d1) / 2, g);
+  }
+  mbox(dw, H - KAMOI, 0.08, M.hinoki, 0, KAMOI, zp, g);
+  mbox(dw, 0.03, 0.12, M.hinoki, 0, 0, zp, g);
   {
-    const panel = glassDoor(d1 - d0 + 0.04, KAMOI - 0.02);
+    const panel = glassDoor(dw + 0.04, KAMOI - 0.02);
     panel.userData.dynamic = true;
-    panel.rotation.y = Math.PI / 2;
-    const base = new THREE.Vector3(0.06, 0.01, (d0 + d1) / 2);
+    const base = new THREE.Vector3(0, 0.01, zp - 0.07);
     panel.position.copy(base);
     g.add(panel);
-    const door = { panel, base, axis: new THREE.Vector3(0, 0, -1), dist: d1 - d0 - 0.05, t: 0, open: false, sound: 'glass' };
-    panel.traverse((o) => (o.userData.door = door));
-    ctx.doors.push(door);
-    ctx.interactables.push(panel);
-    const hit = new THREE.Mesh(new THREE.BoxGeometry(0.2, KAMOI, d1 - d0));
-    hit.position.set(0, KAMOI / 2, (d0 + d1) / 2);
-    hit.visible = false;
-    hit.userData.doorCollider = door;
-    g.add(hit);
+    const door = { panel, base, axis: new THREE.Vector3(1, 0, 0), dist: dw - 0.05, t: 0, open: false, sound: 'glass' };
+    c.addDoor(door, panel, new THREE.Vector3(0, KAMOI / 2, zp), [dw, KAMOI, 0.2]);
   }
 
   // ---------- 浴場 ----------
-  // 富士山の壁画
-  const mural = new THREE.Mesh(new THREE.PlaneGeometry(7.4, 2.0), M.fuji);
-  mural.position.set(-4, 1.6, 3.93);
+  const mural = new THREE.Mesh(new THREE.PlaneGeometry(hw * 2 - 0.6, 2.0), M.fuji);
+  mural.position.set(0, 1.55, hd - 0.04);
   mural.rotation.y = Math.PI;
   g.add(mural);
-  mbox(7.5, 0.04, 0.05, M.hinoki, -4, 2.6, 3.92, g);
+  mbox(hw * 2 - 0.4, 0.55, 0.03, M.mosaic, 0, 0, hd - 0.03, g);
 
-  // ひのきの湯船
+  // ひのきの湯船（奥の壁ぞい）
   const tub = new THREE.Group();
-  const tx0 = -7.7, tx1 = -1.3, tz0 = 1.25, tz1 = 3.92, th = 0.55, rim = 0.14;
+  const tx0 = -hw + 0.1, tx1 = hw - 2.2, tz0 = hd - 2.9, tz1 = hd - 0.05, th = 0.55, rim = 0.14;
   const tw = tx1 - tx0, td = tz1 - tz0, tcx = (tx0 + tx1) / 2, tcz = (tz0 + tz1) / 2;
   mbox(tw, th, rim, M.hinoki, tcx, 0, tz0 + rim / 2, tub);
   mbox(rim, th, td, M.hinoki, tx1 - rim / 2, 0, tcz, tub);
@@ -189,74 +181,47 @@ export function buildBath(g, R, ctx) {
   const pour = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.03, 0.62, 8), new THREE.MeshStandardMaterial({ color: 0xcfe8ec, transparent: true, opacity: 0.45, roughness: 0.05 }));
   pour.position.set(tx0 + 1.1, 0.72, tz1 - 0.55);
   g.add(pour);
-  // 排水溝
   mbox(tw, 0.006, 0.08, P.mat(0x1a1a1a), tcx, 0, tz0 - 0.08, g);
-
-  // 湯気
-  const n = 140;
-  const pos = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) {
-    pos[i * 3] = R.range(tx0, tx1);
-    pos[i * 3 + 1] = R.range(0.5, 2.5);
-    pos[i * 3 + 2] = R.range(tz0, tz1);
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  const steam = new THREE.Points(geo, new THREE.PointsMaterial({
-    map: steamTex, size: 1.4, transparent: true, opacity: 0.09, depthWrite: false, color: 0xdde4e6,
-  }));
-  steam.userData.dynamic = true;
-  g.add(steam);
-  ctx.updaters.push({
+  c.steam(tcx, tcz, tw, td);
+  c.updaters.push({
     userData: {
       update(dt, time) {
-        const a = geo.attributes.position;
-        for (let i = 0; i < n; i++) {
-          let y = a.getY(i) + dt * 0.18;
-          if (y > 2.6) y = 0.5;
-          a.setY(i, y);
-          a.setX(i, a.getX(i) + Math.sin(time * 0.5 + i) * dt * 0.05);
-        }
-        a.needsUpdate = true;
         waterNormal.offset.x = time * 0.02;
         waterNormal.offset.y = time * 0.013;
       },
     },
   });
 
-  // 洗い場（廊下側の壁ぞい・西の壁ぞい）
-  for (let i = 0; i < 5; i++) {
-    const s = washStation(R);
-    s.position.set(-7.0 + i * 1.25, 0, -3.95);
-    g.add(s);
+  // 洗い場（左右の壁ぞい）
+  for (const sx of [-1, 1]) {
+    for (let i = 0; i < 3; i++) {
+      const z = zp + 0.9 + i * 1.2;
+      if (sx > 0 && z > tz0 - 0.4) continue;
+      const s = washStation(R);
+      s.position.set(sx * (hw - 0.05), 0, z);
+      s.rotation.y = -sx * Math.PI / 2;
+      g.add(s);
+    }
   }
-  for (let i = 0; i < 2; i++) {
-    const s = washStation(R);
-    s.position.set(-7.95, 0, -1.9 + i * 1.3);
-    s.rotation.y = Math.PI / 2;
-    g.add(s);
-  }
-  // 積み重ねた桶と椅子
+  // 積み重ねた桶
   for (let i = 0; i < 6; i++) {
     const b = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.1, 0.12, 20, 1, true), P.mat(0xe8c420, { side: THREE.DoubleSide, roughness: 0.4 }));
-    b.position.set(-0.55, 0.06 + i * 0.05, 3.3);
+    b.position.set(hw - 1.0, 0.06 + i * 0.05, hd - 0.6);
     g.add(b);
   }
-  // 浴場の照明（丸い防湿灯）
-  for (const x of [-5.6, -2.4]) {
+  for (const x of [-2.5, 2.5]) {
     const l = new THREE.Group();
     P.cyl(0.2, 0.22, 0.12, P.glow(0xffffff, 0xffe2b8, 1.2), 0, -0.12, 0, l, 20);
     P.lightMarker(l, 0, -0.4, 0, 0xffd8a8, 3.2, 7);
-    l.position.set(x, H, -0.5);
+    l.position.set(x, H, (zp + hd) / 2);
     g.add(l);
   }
 
   // ---------- 脱衣所 ----------
-  // 棚とかご（いくつかには浴衣が残っている）
-  for (const z of [-2.0, 0.6]) {
+  for (const sx of [-1, 1]) {
     const sh = P.shelf(2.2, 1.75, 0.45, 4, 0x6a4a2a);
-    sh.rotation.y = -Math.PI / 2;
-    sh.position.set(7.7, 0, z);
+    sh.rotation.y = -sx * Math.PI / 2;
+    sh.position.set(sx * (hw - 0.3), 0, -hd + 2.6);
     for (let lv = 0; lv < 4; lv++)
       for (let k = 0; k < 4; k++) {
         const b = P.basket();
@@ -271,58 +236,48 @@ export function buildBath(g, R, ctx) {
     sh.userData.solid = true;
     g.add(sh);
   }
-  // 洗面台
-  const vanity = P.counter(3.8, 0.8, 0.55, 0xd8d0c0, 0xe8e4dc);
-  vanity.position.set(4, 0, 3.6);
-  vanity.rotation.y = Math.PI;
-  vanity.userData.solid = true;
-  g.add(vanity);
-  for (let i = 0; i < 3; i++) {
-    const x = 2.75 + i * 1.25;
-    mbox(0.9, 0.9, 0.02, P.mat(0xa8b2b6, { metalness: 0.9, roughness: 0.1 }), x, 1.05, 3.92, g);
-    const bulb = P.box(0.9, 0.06, 0.06, P.glow(0xfff4e0, 0xffe8c0, 1.4), x, 2.0, 3.9, g);
-    P.lightMarker(g, x, 1.9, 3.5, 0xffe0b8, 1.0, 3);
-    P.cyl(0.18, 0.14, 0.02, P.mat(0xf4f2ee, { roughness: 0.2 }), x, 0.79, 3.6, g, 20);
-    const dryer = P.box(0.08, 0.2, 0.08, P.mat(0xe8e8e8), x + 0.45, 1.2, 3.85, g);
-    dryer.rotation.z = 0.3;
+  // 洗面台（仕切りの手前側）
+  for (const sx of [-1, 1]) {
+    const vanity = P.counter(2.6, 0.8, 0.5, 0xd8d0c0, 0xe8e4dc);
+    vanity.position.set(sx * (dw / 2 + 0.3 + 1.3), 0, zp - 0.32);
+    vanity.rotation.y = Math.PI;
+    vanity.userData.solid = true;
+    g.add(vanity);
+    for (let i = 0; i < 2; i++) {
+      const x = sx * (dw / 2 + 0.3 + 0.65 + i * 1.3);
+      mbox(0.9, 0.9, 0.02, P.mat(0xa8b2b6, { metalness: 0.9, roughness: 0.1, envMapIntensity: 9 }), x, 1.05, zp - 0.06, g);
+      P.box(0.9, 0.06, 0.06, P.glow(0xfff4e0, 0xffe8c0, 1.4), x, 2.0, zp - 0.08, g);
+      P.cyl(0.18, 0.14, 0.02, P.mat(0xf4f2ee, { roughness: 0.2 }), x, 0.79, zp - 0.32, g, 20);
+      const dryer = P.box(0.08, 0.2, 0.08, P.mat(0xe8e8e8), x + 0.45, 1.2, zp - 0.1, g);
+      dryer.rotation.z = 0.3;
+    }
+    P.lightMarker(g, sx * 3, 1.9, zp - 0.6, 0xffe0b8, 1.2, 3.5);
   }
-  // ベンチ・体重計・扇風機・マッサージチェア・冷水器
   const bench = new THREE.Group();
   P.box(1.8, 0.05, 0.4, M.hinoki, 0, 0.4, 0, bench);
   for (const x of [-0.8, 0.8]) P.box(0.06, 0.4, 0.35, M.darkWood, x, 0, 0, bench);
-  bench.position.set(4, 0, 0.3);
+  bench.position.set(0, 0, -hd + 2.4);
+  bench.rotation.y = Math.PI / 2;
   bench.userData.solid = true;
   g.add(bench);
   const sc = P.scale();
-  sc.position.set(1.0, 0, -2.6);
+  sc.position.set(-1.6, 0, -hd + 1.0);
   g.add(sc);
   const fan = P.fan();
-  fan.position.set(7.3, 0, 3.0);
-  fan.rotation.y = -2.4;
+  fan.position.set(hw - 0.6, 0, -hd + 0.6);
+  fan.rotation.y = -0.8;
   g.add(fan);
   const mc = P.massageChair();
-  mc.position.set(7.0, 0, -3.2);
-  mc.rotation.y = -Math.PI / 2 - 0.3;
+  mc.position.set(-hw + 0.8, 0, zp - 1.4);
+  mc.rotation.y = Math.PI / 2;
   mc.userData.solid = true;
   g.add(mc);
-  const cooler = new THREE.Group();
-  P.box(0.4, 1.0, 0.35, P.mat(0xd8d8d0), 0, 0, 0, cooler);
-  P.cyl(0.14, 0.14, 0.35, P.mat(0x9ac8e0, { transparent: true, opacity: 0.6 }), 0, 1.0, 0, cooler);
-  cooler.position.set(1.2, 0, -3.5);
-  cooler.userData.solid = true;
-  g.add(cooler);
-  // マット・貼り紙・時計
-  mbox(0.9, 0.012, 0.6, P.mat(0x4a6a8a), 0.6, 0, 1.0, g, false);
+  mbox(1.0, 0.012, 0.6, P.mat(0x4a6a8a), 0, 0, zp - 0.5, g, false);
   const poster = sign('入浴の心得\n\n一、かけ湯をしてから\n一、タオルは湯船に\n　入れないでください\n一、夜十一時以降の\n　入浴はご遠慮ください');
-  poster.position.set(0.04, 1.4, -1.6);
-  poster.rotation.y = Math.PI / 2;
+  poster.position.set(hw - 0.05, 1.4, -hd + 1.2);
+  poster.rotation.y = -Math.PI / 2;
   g.add(poster);
-  const clk = P.clock();
-  clk.position.set(4, 2.2, 3.9);
-  clk.rotation.y = Math.PI;
-  g.add(clk);
-  // 脱衣所の照明
   const lamp = ceilingLamp(true);
-  lamp.position.set(4, H - 0.05, -0.6);
+  lamp.position.set(0, H - 0.05, -hd + 2.3);
   g.add(lamp);
 }

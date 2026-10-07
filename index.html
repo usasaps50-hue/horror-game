@@ -17,13 +17,21 @@
     font-family: "Hiragino Mincho ProN", "Yu Mincho", serif; }
   canvas { display: block; }
   #overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    background: rgba(0,0,0,0.82); cursor: pointer; text-align: center; gap: 18px; transition: opacity .4s; z-index: 10; }
+    background: rgba(0,0,0,0.84); text-align: center; gap: 18px; transition: opacity .4s; z-index: 10; }
   #overlay.hidden { opacity: 0; pointer-events: none; }
   #overlay h1 { font-size: 46px; letter-spacing: .3em; margin: 0; color: #c8b890; font-weight: normal; }
   #overlay .story { font-size: 16px; line-height: 2; color: #a89a80; }
   #overlay .keys { font-size: 13px; line-height: 1.9; color: #7a7060; font-family: sans-serif; }
-  #overlay .start { font-size: 18px; color: #e8dcc0; animation: blink 2s infinite; }
-  @keyframes blink { 50% { opacity: .35; } }
+  #start { font: inherit; font-size: 18px; color: #e8dcc0; background: none; border: 1px solid #6a5a40; padding: 10px 36px;
+    cursor: pointer; letter-spacing: .3em; }
+  #start:hover { background: rgba(200,180,140,0.12); }
+  #settings { font-family: sans-serif; font-size: 13px; color: #a89a80; display: grid; grid-template-columns: auto 200px 48px;
+    gap: 8px 12px; align-items: center; border-top: 1px solid #3a3226; padding-top: 16px; }
+  #settings label { text-align: right; }
+  #settings output { text-align: left; color: #e8dcc0; font-variant-numeric: tabular-nums; }
+  #settings input[type=range] { width: 200px; accent-color: #b0905a; }
+  #settings .row-full { grid-column: 1 / -1; display: flex; justify-content: center; gap: 16px; align-items: center; }
+  #s-reset { font: inherit; color: #a89a80; background: none; border: 1px solid #4a4030; padding: 4px 12px; cursor: pointer; }
   #crosshair { position: fixed; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px; border-radius: 50%;
     background: rgba(255,255,255,0.5); pointer-events: none; }
   #prompt { position: fixed; left: 50%; top: 58%; transform: translateX(-50%); font-size: 15px; color: #e8dcc0;
@@ -31,8 +39,12 @@
   #toast { position: fixed; left: 50%; top: 18%; transform: translateX(-50%); font-size: 26px; letter-spacing: .2em;
     color: #e8dcc0; text-shadow: 0 0 10px #000; opacity: 0; transition: opacity .8s; pointer-events: none; white-space: nowrap; }
   #toast.show { opacity: 1; }
-  #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #000; color: #8a7a60; z-index: 20; letter-spacing: .3em; }
-  #lap { position: fixed; left: 12px; bottom: 10px; font-size: 11px; color: #554c40; font-family: monospace; }
+  #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #000;
+    color: #8a7a60; z-index: 20; letter-spacing: .3em; }
+  #seed { position: fixed; left: 12px; bottom: 10px; font-size: 11px; color: #554c40; font-family: monospace; }
+  #minimap { position: fixed; right: 14px; top: 14px; width: 220px; height: 220px; background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(200,190,160,0.15); }
+  #minimap.hidden { display: none; }
   #goal { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
     gap: 16px; background: rgba(0,0,0,0); color: #b01818; font-size: 52px; letter-spacing: .4em; opacity: 0;
     transition: opacity 3s, background 3s; pointer-events: none; z-index: 5; }
@@ -43,16 +55,23 @@
 <body>
 <div id="overlay">
   <h1>座敷童子</h1>
-  <div class="story">修学旅行の夜。<br>トイレに行こうと部屋を出たら、廊下がどこまでも続いていた。<br>角を曲がっても、曲がっても、同じ廊下に戻ってくる。</div>
-  <div class="keys">WASD 移動 ／ マウス 視点 ／ Shift 走る ／ E 戸を開ける<br>F 懐中電灯 ／ R 最初から（別の旅館） ／ Esc 一時停止</div>
-  <div class="start">クリックしてはじめる</div>
+  <div class="story">修学旅行の夜。目をさますと、同じ部屋の友達がひとりもいなかった。<br>広い旅館のどこかに、子どもの笑い声がする。<br>一番奥の部屋を探さなければ。</div>
+  <div class="keys">WASD 移動 ／ マウス 視点 ／ Shift 走る ／ E 戸を開ける・閉める・調べる<br>F 懐中電灯 ／ M 地図 ／ Esc 一時停止 ／ Shift+R 別の旅館で最初から</div>
+  <button id="start">はじめる</button>
+  <div id="settings">
+    <label for="s-sens">マウス感度</label><input id="s-sens" type="range" min="0.2" max="3" step="0.05"><output id="s-sens-v"></output>
+    <label for="s-fov">視野角</label><input id="s-fov" type="range" min="50" max="100" step="1"><output id="s-fov-v"></output>
+    <label for="s-bright">明るさ</label><input id="s-bright" type="range" min="0.5" max="2" step="0.05"><output id="s-bright-v"></output>
+    <div class="row-full"><label><input id="s-inv" type="checkbox"> 上下を反転</label><button id="s-reset">初期設定に戻す</button></div>
+  </div>
 </div>
 <div id="crosshair"></div>
 <div id="prompt"></div>
 <div id="toast"></div>
-<div id="lap"></div>
+<canvas id="minimap" width="220" height="220"></canvas>
+<div id="seed"></div>
 <div id="loading">読み込み中……</div>
-<div id="goal">……みつけた<small>奥の間にたどり着いた　／　R で別の旅館へ</small></div>
+<div id="goal">……みつけた<small>奥の間にたどり着いた　／　Shift+R で別の旅館へ</small></div>
 <script type="module" src="src/main.js"></script>
 </body>
 </html>

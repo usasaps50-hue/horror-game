@@ -264,7 +264,7 @@ export function tub(w = 4, d = 3) {
 
 export function washStation() {
   const g = group();
-  box(0.8, 0.5, 0.02, mat(0xa9b4b8, { metalness: 0.9, roughness: 0.15 }), 0, 0.7, -0.15, g);
+  box(0.8, 0.5, 0.02, mat(0xa9b4b8, { metalness: 0.9, roughness: 0.15, envMapIntensity: 9 }), 0, 0.7, -0.15, g);
   box(0.06, 0.06, 0.12, mat(0xaaaaaa, { metalness: 0.8, roughness: 0.2 }), 0, 0.55, -0.1, g);
   cyl(0.14, 0.12, 0.22, mat(0xc8c0b0), 0, 0, 0.25, g);
   cyl(0.12, 0.1, 0.12, mat(0xe8c41a), 0.3, 0, 0.3, g);
