@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>旅館 ―座敷童子―</title>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+  }
+}
+</script>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #000; color: #e8dcc0;
+    font-family: "Hiragino Mincho ProN", "Yu Mincho", serif; }
+  canvas { display: block; }
+  #overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.82); cursor: pointer; text-align: center; gap: 18px; transition: opacity .4s; z-index: 10; }
+  #overlay.hidden { opacity: 0; pointer-events: none; }
+  #overlay h1 { font-size: 46px; letter-spacing: .3em; margin: 0; color: #c8b890; font-weight: normal; }
+  #overlay .story { font-size: 16px; line-height: 2; color: #a89a80; }
+  #overlay .keys { font-size: 13px; line-height: 1.9; color: #7a7060; font-family: sans-serif; }
+  #overlay .start { font-size: 18px; color: #e8dcc0; animation: blink 2s infinite; }
+  @keyframes blink { 50% { opacity: .35; } }
+  #crosshair { position: fixed; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px; border-radius: 50%;
+    background: rgba(255,255,255,0.5); pointer-events: none; }
+  #prompt { position: fixed; left: 50%; top: 58%; transform: translateX(-50%); font-size: 15px; color: #e8dcc0;
+    text-shadow: 0 0 6px #000; pointer-events: none; font-family: sans-serif; }
+  #toast { position: fixed; left: 50%; top: 18%; transform: translateX(-50%); font-size: 26px; letter-spacing: .2em;
+    color: #e8dcc0; text-shadow: 0 0 10px #000; opacity: 0; transition: opacity .8s; pointer-events: none; white-space: nowrap; }
+  #toast.show { opacity: 1; }
+  #seed { position: fixed; left: 12px; bottom: 10px; font-size: 11px; color: #554c40; font-family: monospace; }
+  #minimap { position: fixed; right: 14px; top: 14px; width: 180px; height: 180px; background: rgba(0,0,0,0.35);
+    border: 1px solid rgba(200,190,160,0.15); }
+  #minimap.hidden { display: none; }
+  #goal { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 16px; background: rgba(0,0,0,0); color: #b01818; font-size: 52px; letter-spacing: .4em; opacity: 0;
+    transition: opacity 3s, background 3s; pointer-events: none; z-index: 5; }
+  #goal.show { opacity: 1; background: rgba(0,0,0,0.6); }
+  #goal small { font-size: 15px; color: #a89a80; letter-spacing: .2em; }
+</style>
+</head>
+<body>
+<div id="overlay">
+  <h1>座敷童子</h1>
+  <div class="story">修学旅行の夜。<br>同じ部屋の友達が、ひとり、またひとりといなくなった。<br>旅館の一番奥の部屋に、何かがいる。</div>
+  <div class="keys">WASD 移動 ／ マウス 視点 ／ Shift 走る ／ E 戸を開ける・調べる<br>F 懐中電灯 ／ M 地図 ／ R 別の旅館を生成 ／ Esc 一時停止</div>
+  <div class="start">クリックしてはじめる</div>
+</div>
+<div id="crosshair"></div>
+<div id="prompt"></div>
+<div id="toast"></div>
+<canvas id="minimap" width="180" height="180"></canvas>
+<div id="seed"></div>
+<div id="goal">……みつけた<small>奥の間にたどり着いた　／　R で別の旅館へ</small></div>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
