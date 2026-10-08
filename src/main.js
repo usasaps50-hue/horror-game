@@ -4,7 +4,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { mulberry32, makeRandom } from './rng.js';
 import { initTextures } from './textures.js';
 import { buildRyokan } from './building.js';
-import { P } from './layout.js';
+import { FH, U, GRID_W, GRID_H, FLOORS } from './plan.js';
 
 // ---------- 設定（ブラウザに保存） ----------
 const DEFAULTS = { sensitivity: 1.0, fov: 70, brightness: 1.0, invertY: false };
@@ -92,9 +92,12 @@ document.getElementById('loading').remove();
 document.getElementById('seed').textContent = `seed ${seed}`;
 
 // ---------- プレイヤー ----------
-const EYE = 1.5;
-const RADIUS = 0.26;
-camera.position.copy(world.start.pos).setY(EYE);
+// 小学六年生の目の高さ
+const EYE = 1.28;
+const RADIUS = 0.22;
+let floor = world.start.floor;
+let groundY = floor * FH;
+camera.position.copy(world.start.pos).setY(groundY + EYE);
 let yaw = world.start.yaw;
 let pitch = 0;
 
@@ -154,13 +157,24 @@ addEventListener('keydown', (e) => {
     flashlight.visible = flashOn;
   }
   if (e.code === 'KeyM') minimap.classList.toggle('hidden');
-  if (e.code === 'KeyR' && e.shiftKey) location.search = `?seed=${Math.floor(Math.random() * 1e9)}`;
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
 
+// 階段の上では、進んだぶんだけ高さが変わる
+function groundAt(x, z) {
+  for (const s of world.stairs) {
+    if (x > s.x0 && x < s.x1 && z > s.z0 && z < s.z1 && (floor === s.from || floor === s.from + 1)) {
+      const t = Math.max(0, Math.min(1, (z - s.z0) / (s.z1 - s.z0)));
+      return { y: (s.from + t) * FH, floor: t > 0.5 ? s.from + 1 : s.from, stairs: true };
+    }
+  }
+  return { y: floor * FH, floor, stairs: false };
+}
+let onStairs = false;
+
 const overlaps = (c, x, z, r) => x + r > c.minX && x - r < c.maxX && z + r > c.minZ && z - r < c.maxZ;
 function blocked(x, z) {
-  for (const c of world.colliders) {
+  for (const c of world.colliders[floor]) {
     if (c.door && c.door.t > 0.75) continue;
     if (overlaps(c, x, z, RADIUS)) return true;
   }
@@ -177,7 +191,7 @@ const center = new THREE.Vector2(0, 0);
 function updateTarget() {
   camera.updateMatrixWorld();
   ray.setFromCamera(center, camera);
-  const hit = ray.intersectObjects(world.interactables, true)[0];
+  const hit = ray.intersectObjects(world.interactables.filter((o) => o.userData.floor === floor), true)[0];
   target = hit ? hit.object : null;
   const door = target?.userData.door;
   if (door) prompt.textContent = door.open ? 'E　閉める' : 'E　開ける';
@@ -196,7 +210,7 @@ function interact() {
   }
   if (door.open) {
     // 戸口に立っていると閉められない（閉じこめられないように）
-    const c = world.colliders.find((x) => x.door === door);
+    const c = world.colliders[floor].find((x) => x.door === door);
     if (c && overlaps(c, camera.position.x, camera.position.z, RADIUS)) return;
   }
   door.open = !door.open;
@@ -216,11 +230,17 @@ const inRect = (r, x, z) => x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1;
 const visitedRooms = new Set();
 const visitedCorr = new Set();
 let currentRoom = null;
+let lastFloor = floor;
 let goalShown = false;
 function updatePlace() {
   const { x, z } = camera.position;
-  const room = world.rooms.find((r) => inRect(r, x, z)) || null;
-  world.corridors.forEach((c) => inRect(c, x, z) && visitedCorr.add(c));
+  const room = world.rooms.find((r) => r.floor === floor && inRect(r, x, z)) || null;
+  const cx = Math.floor(x / U), cz = Math.floor(z / U);
+  for (let j = cz - 1; j <= cz + 1; j++) for (let i = cx - 1; i <= cx + 1; i++) visitedCorr.add(`${floor}:${i}:${j}`);
+  if (floor !== lastFloor) {
+    lastFloor = floor;
+    toast(FLOORS[floor].name, 1600);
+  }
   if (room === currentRoom) return;
   currentRoom = room;
   if (!room) return;
@@ -236,17 +256,22 @@ const minimap = document.getElementById('minimap');
 const mm = minimap.getContext('2d');
 function drawMinimap() {
   const W = minimap.width;
-  const ext = (Math.max(world.layout.NX, world.layout.NY) + 0.2) * P;
-  const s = W / ext;
-  const o = 0.1 * P;
+  const s = W / GRID_W;
+  const oy = (W - GRID_H * s) / 2;
   mm.clearRect(0, 0, W, W);
-  mm.fillStyle = 'rgba(200,190,160,0.28)';
-  for (const c of visitedCorr) mm.fillRect((c.x0 + o) * s, (c.z0 + o) * s, (c.x1 - c.x0) * s, (c.z1 - c.z0) * s);
-  for (const r of visitedRooms) {
-    mm.fillStyle = r.type === 'oku' ? 'rgba(170,20,20,0.7)' : r === currentRoom ? 'rgba(230,210,170,0.55)' : 'rgba(200,190,160,0.35)';
-    mm.fillRect((r.x0 + o) * s + 1, (r.z0 + o) * s + 1, (r.x1 - r.x0) * s - 2, (r.z1 - r.z0) * s - 2);
+  const { at } = world.grids[floor];
+  for (const k of visitedCorr) {
+    const [f, i, j] = k.split(':').map(Number);
+    if (f !== floor) continue;
+    const c = at(i, j);
+    if (!c) continue;
+    mm.fillStyle = c.kind === 'corr' ? 'rgba(200,190,160,0.32)' : c.room.type === 'oku' ? 'rgba(170,20,20,0.7)' : c.room === currentRoom ? 'rgba(230,210,170,0.6)' : 'rgba(200,190,160,0.45)';
+    mm.fillRect(i * s, oy + j * s, s + 0.5, s + 0.5);
   }
-  const px = (camera.position.x + o) * s, pz = (camera.position.z + o) * s;
+  mm.fillStyle = '#e8dcc0';
+  mm.font = '12px sans-serif';
+  mm.fillText(FLOORS[floor].name, 6, 14);
+  const px = (camera.position.x / U) * s, pz = oy + (camera.position.z / U) * s;
   mm.fillStyle = '#fff';
   mm.beginPath();
   mm.arc(px, pz, 3, 0, Math.PI * 2);
@@ -275,7 +300,7 @@ function update(dt) {
     fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw));
     right.set(Math.cos(yaw), 0, -Math.sin(yaw));
     const run = keys.has('ShiftLeft') || keys.has('ShiftRight');
-    const speed = run ? 3.6 : 1.9;
+    const speed = run ? 3.3 : 1.7;
     let mx = 0, mz = 0;
     if (keys.has('KeyW') || keys.has('ArrowUp')) { mx += fwd.x; mz += fwd.z; }
     if (keys.has('KeyS') || keys.has('ArrowDown')) { mx -= fwd.x; mz -= fwd.z; }
@@ -288,9 +313,13 @@ function update(dt) {
       const p = camera.position;
       if (!blocked(p.x + mx, p.z)) p.x += mx;
       if (!blocked(p.x, p.z + mz)) p.z += mz;
-      bob += dt * (run ? 11 : 7);
+      bob += dt * (run ? 12 : 8);
     }
-    camera.position.y = EYE + Math.sin(bob) * 0.022;
+    const gnd = groundAt(camera.position.x, camera.position.z);
+    floor = gnd.floor;
+    onStairs = gnd.stairs;
+    groundY += (gnd.y - groundY) * Math.min(1, dt * 14);
+    camera.position.y = groundY + EYE + Math.sin(bob) * 0.02;
   }
 
   for (const d of world.doors) {
@@ -316,6 +345,7 @@ function update(dt) {
     lightTimer = 0.2;
     const p = camera.position;
     assigned = world.lights
+      .filter((l) => l.floor === floor || (onStairs && Math.abs(l.floor - floor) <= 1))
       .map((l) => ({ l, d: l.pos.distanceToSquared(p) }))
       .sort((a, b) => a.d - b.d)
       .slice(0, POOL)
@@ -352,11 +382,26 @@ addEventListener('resize', () => {
 // デバッグ用
 window.__game = {
   world, scene, camera, renderer, seed, settings,
-  setView(x, z, y, p = 0) {
-    camera.position.set(x, EYE, z);
+  get floor() { return floor; },
+  setView(x, z, y, p = 0, f = floor) {
+    floor = f;
+    groundY = f * FH;
+    camera.position.set(x, groundY + EYE, z);
     yaw = y;
     pitch = p;
   },
   interact: () => interact(),
+  // テスト用：ロックなしで 1 歩ぶん動かす
+  move(dx, dz) {
+    const p = camera.position;
+    if (!blocked(p.x + dx, p.z)) p.x += dx;
+    if (!blocked(p.x, p.z + dz)) p.z += dz;
+    const gnd = groundAt(p.x, p.z);
+    floor = gnd.floor;
+    onStairs = gnd.stairs;
+    groundY = gnd.y;
+    p.y = groundY + EYE;
+    return [p.x.toFixed(2), p.z.toFixed(2), floor, groundY.toFixed(2)];
+  },
   step: (dt = 0.016) => { update(dt); renderer.render(scene, camera); },
 };

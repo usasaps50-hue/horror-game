@@ -170,6 +170,15 @@ export function noren(w, h = 0.9, text = 'ゆ') {
   return g;
 }
 
+// 窓の外（夜の庭）
+let _outside;
+function outsideMaterial() {
+  if (!_outside) {
+    _outside = new THREE.MeshStandardMaterial({ map: T.moonWindow, emissive: 0xffffff, emissiveMap: T.moonWindow, emissiveIntensity: 0.55, roughness: 0.2 });
+  }
+  return _outside;
+}
+
 // ---------- 壁 ----------
 // 壁は「u 方向に並ぶ柱間（bay）」の並び。+z 側が廊下（見る側）、-z 側が部屋。
 // bay = { len, type: 'wall' | 'shoji' | 'door' | 'noren' | 'open', ...}
@@ -204,19 +213,47 @@ export function wallRun(bays, ctx) {
       solid(mbox(inner, KAMOI - kh, WT, b.lowerMat || M.plaster, uc, kh, 0, g));
       mbox(inner, 0.09, WT + 0.03, M.darkWood, uc, 0, 0, g);
     } else if (b.type === 'shoji') {
-      mbox(inner + 0.05, 0.035, WT + 0.02, M.agedWood, uc, 0, 0, g);
+      // 障子：手前の 1 枚を横に引いて開けられる。sill があれば腰高の窓
+      const sill = b.sill || 0;
+      if (sill > 0) {
+        solid(mbox(inner, sill, WT + 0.01, M.koshiita, uc, 0, 0, g));
+        mbox(inner + 0.04, 0.04, WT + 0.08, M.darkWood, uc, sill, 0, g);
+      } else {
+        mbox(inner + 0.05, 0.035, WT + 0.02, M.agedWood, uc, 0, 0, g);
+      }
+      const y0 = sill > 0 ? sill + 0.04 : 0.035;
+      const ph = KAMOI - y0;
       const pw = inner / 2 + 0.025;
-      for (const [k, z] of [[-1, 0.022], [1, -0.022]]) {
-        const p = shojiPanel(pw, KAMOI - 0.035, b.paper || M.washiCool, b.shojiOpts);
-        p.position.set(uc + (k * (inner - pw)) / 2, 0.035, z);
-        g.add(p);
-        if (k === -1) g.userData.lastShoji = p;
+      const opts = { ...(b.shojiOpts || {}), ...(sill > 0 ? { koshi: 0, rows: 4 } : {}) };
+      const back = shojiPanel(pw, ph, b.paper || M.washiCool, opts);
+      back.position.set(uc - (inner - pw) / 2, y0, -0.022);
+      g.add(back);
+      const front = shojiPanel(pw, ph, b.paper || M.washiCool, opts);
+      front.userData.dynamic = true;
+      const base = new THREE.Vector3(uc + (inner - pw) / 2, y0, 0.022);
+      front.position.copy(base);
+      g.add(front);
+      const door = { panel: front, base, axis: new THREE.Vector3(-1, 0, 0), dist: pw - 0.05, t: 0, open: false, window: true };
+      front.traverse((o) => (o.userData.door = door));
+      ctx.doors.push(door);
+      ctx.interactables.push(front);
+      const pick = new THREE.Mesh(new THREE.BoxGeometry(inner, ph, 0.4), new THREE.MeshBasicMaterial());
+      pick.position.set(uc, y0 + ph / 2, 0);
+      pick.visible = false;
+      pick.userData.dynamic = true;
+      pick.userData.door = door;
+      g.add(pick);
+      ctx.interactables.push(pick);
+      // 外に面した窓：開けると夜の外が見える
+      if (b.outside) {
+        const glass = new THREE.Mesh(new THREE.PlaneGeometry(inner, ph), outsideMaterial());
+        glass.position.set(uc, y0 + ph / 2, -(WT / 2 + 0.12));
+        g.add(glass);
       }
       // 当たり判定用（見えない）
       const hit = new THREE.Mesh(new THREE.BoxGeometry(inner, KAMOI, WT));
       hit.position.set(uc, KAMOI / 2, 0);
       hit.visible = false;
-      hit.userData.colliderOnly = true;
       g.add(solid(hit));
     } else if (b.type === 'glass') {
       mbox(inner + 0.05, 0.035, WT + 0.02, M.agedWood, uc, 0, 0, g);

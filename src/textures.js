@@ -221,7 +221,7 @@ export const T = {
     g.lineWidth = 8;
     g.strokeRect(4, 4, w - 8, h - 8);
     verticalText(g, ['歓迎'], w / 2, 18, 46, 0, '#7a0f0f');
-    verticalText(g, ['第二中学校', '修学旅行御一行様'], w / 2 + 26, 130, 34, 52, '#151008');
+    verticalText(g, ['第二小学校', '修学旅行御一行様'], w / 2 + 26, 130, 34, 52, '#151008');
   }, 1, 1, false),
 
   ofuda: tex(64, 192, (g, w, h) => {

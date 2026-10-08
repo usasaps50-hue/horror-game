@@ -218,7 +218,7 @@ const S = {
 // ---------- 中部屋（12m × 6m） ----------
 const Mrooms = {
   oobeya: {
-    name: '大部屋（二年三組）', plate: '二年三組', floor: 'tatami', door: 'koshi', windows: true,
+    name: '大部屋（六年二組）', plate: '六年二組', floor: 'tatami', door: 'koshi', windows: true,
     build(c) {
       // 長い方向に布団を 2 列
       const alongX = c.hw >= c.hd;
