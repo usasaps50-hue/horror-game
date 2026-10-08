@@ -31,6 +31,8 @@ const S = {
       }
       c.wall(P.bookLedger(), 'w', 0.5, 0.5).position.y = 0.33;
       c.put(Q.beerCans(c.R, 6), 0.3, 0.8);
+      c.put(P.futon(), -0.6, 1.2, 0.1);
+      c.put(P.crtTv(), c.corners[2][0], c.corners[2][1], Math.atan2(-c.corners[2][0], -c.corners[2][1]), true);
       c.put(Q.ashtray(), -0.2, 0.6);
       c.put(P.futonPile(c.R, 2), c.corners[0][0], c.corners[0][1], 0.3, true);
       for (let i = 0; i < 2; i++) c.put(P.bag(0x1a1a1a), c.corners[1][0] + i * 0.3, c.corners[1][1]);
@@ -63,23 +65,31 @@ const S = {
   butsuma: {
     name: '仏間', plate: '仏間', floor: 'tatami', door: 'fusuma',
     build(c) {
-      c.wall(P.butsudan(), 's', 0, 0.3, true);
-      c.wall(P.zabuton(0x3a2a4a), 's', 0, 1.2);
-      for (let i = 0; i < 5; i++) c.wall(P.portraitFrame(), 's', -0.6 + i * 0.3, 0.04).position.y = 1.85;
-      for (const t of [-0.25, 0.25]) c.wall(P.candle(), 's', t, 0.8);
+      c.wall(P.butsudan(), 's', 0, 0.35, true);
+      for (let i = 0; i < 5; i++) c.wall(P.portraitFrame(), 's', -0.7 + i * 0.35, 0.04).position.y = 1.9;
+      for (const t of [-0.35, 0.35]) c.wall(P.candle(), 's', t, 0.9);
+      for (const t of [-0.75, 0.75]) c.wall(P.andon(), 's', t, 0.5);
+      // 法事のあとのように座布団が並んでいる
+      const rows = Math.max(2, Math.floor((c.hd * 2 - 3) / 0.9));
+      for (let r = 0; r < rows; r++)
+        for (let k = -2; k <= 2; k++) c.put(P.zabuton(), k * 0.75, c.hd - 1.9 - r * 0.9, Math.PI + c.R.range(-0.08, 0.08));
+      c.wall(P.byobu(2.2, 1.5), 'w', 0, 0.3);
       c.ofuda(4);
     },
   },
   ningyo: {
     name: '人形の間', plate: '人形の間', floor: 'tatami', door: 'fusuma',
     build(c) {
-      c.wall(P.hinaDan(c.R, Math.min(2.8, c.hw * 2 - 0.8)), 's', 0, 0.85, true);
-      for (let i = 0; i < 2; i++) {
-        const [x, z] = c.corners[i];
-        c.put(P.glassCase(c.R), x, z, Math.atan2(-x, -z), true);
+      c.wall(P.hinaDan(c.R, Math.min(3.2, c.hw * 2 - 0.8)), 's', 0, 1.0, true);
+      for (const t of [-0.45, 0.45]) c.wall(P.candle(), 's', t, 2.2);
+      // 両側の壁ぞいに、ひな人形がずらりとこちらを向いて座っている
+      for (const side of ['w', 'e']) {
+        c.wall(P.lowTable(Math.min(2.0, c.hd * 2 - 2), 0.5, 0.35), side, 0.15, 0.35, true);
+        const n = Math.floor((c.hd * 2 - 1.6) / 0.32);
+        for (let i = 0; i < n; i++) c.wall(P.doll(c.R, 1.3), side, -0.85 + (i * 1.7) / Math.max(1, n - 1), 0.3).position.y = i % 3 === 0 ? 0 : 0.45;
       }
-      for (const t of [-0.4, 0.4]) c.wall(P.candle(), 's', t, 1.9);
-      for (let i = 0; i < 4; i++) c.put(P.doll(c.R, 1.8), c.R.range(-1.2, 1.2), c.R.range(-0.8, 0.8), c.R.range(0, 6));
+      for (let i = 0; i < 6; i++) c.put(P.doll(c.R, 1.6), c.R.range(-1.2, 1.2), c.R.range(-0.5, 1.5), Math.PI + c.R.range(-0.4, 0.4));
+      c.put(P.andon(), c.corners[2][0], c.corners[2][1]);
     },
   },
   futonbeya: {
@@ -103,6 +113,8 @@ const S = {
       c.put(P.crate(0.7, 0.5, 0.5), x, z, 0.2, true);
       c.put(P.crate(0.5, 0.4, 0.45), x, z, -0.3).position.y = 0.5;
       c.put(P.brokenChair(), 0.3, 0.4, c.R.range(0, 6));
+      c.put(P.crtTv(), -0.6, 1.2, 2.6, true);
+      c.put(P.doll(c.R, 2), 0.8, -0.2, Math.PI);
       c.wall(P.sheetCovered(0.8, 1.5, 0.6), 'e', 0.4, 0.4, true);
       c.bulb(0, 0, true);
     },
@@ -136,7 +148,8 @@ const S = {
     build(c) {
       c.wall(Q.altar(), 's', 0, 0.4, true);
       for (const t of [-0.75, 0.75]) c.wall(Q.sakeBarrel(), 's', t, 0.4, true);
-      c.put(P.zabuton(0xc8c0a0), 0, 0.2, Math.PI);
+      for (let k = -1; k <= 1; k++) c.put(P.zabuton(), k * 0.8, 0.4, Math.PI);
+      for (const t of [-0.6, 0.6]) c.wall(P.stoneLantern(), 's', t, 1.4, true);
       for (const [x, z] of c.corners) c.put(P.candle(), x, z);
       const sn = Q.shimenawa(c.hw * 2 - 0.4);
       c.put(sn, 0, -c.hd + 0.2).position.y = 2.3;
@@ -188,14 +201,17 @@ const S = {
     build(c) {
       c.wall(Q.smallDesk(), 's', -0.4, 0.3, true);
       c.wall(Q.randoseru(), 's', -0.4, 0.35).position.y = 0.59;
-      c.wall(P.futon(0xd88aa0), 'w', 0.2, 0.6);
-      for (let i = 0; i < 6; i++) {
+      c.wall(P.futon(), 'w', 0.3, 0.7);
+      for (let i = 0; i < 8; i++) {
         const side = c.R.pick(['s', 'e', 'w']);
-        c.wall(Q.drawing(c.R), side, c.R.range(-0.8, 0.8), 0.04).position.y = c.R.range(1.1, 1.7);
+        c.wall(Q.drawing(c.R), side, c.R.range(-0.85, 0.85), 0.04).position.y = c.R.range(1.0, 1.7);
       }
-      for (let i = 0; i < 5; i++) c.wall(Q.kokeshi(c.R.range(0.8, 1.3)), 'e', -0.6 + i * 0.3, 0.3);
+      c.wall(P.lowTable(1.2, 0.5, 0.3), 'e', 0, 0.35, true);
+      for (let i = 0; i < 5; i++) c.wall(Q.kokeshi(c.R.range(0.8, 1.3)), 'e', -0.35 + i * 0.17, 0.35).position.y = 0.42;
+      for (let i = 0; i < 3; i++) c.put(P.doll(c.R, 1.4), c.R.range(-1, 1), c.R.range(0, 1.5), Math.PI + c.R.range(-0.5, 0.5));
       c.put(P.toys(c.R), 0.3, 0.3);
       c.put(P.temari(1.2), -0.5, 0.6);
+      c.put(P.zabuton(), 0.4, 1.4, 0.3);
       c.put(P.andon(), c.corners[0][0], c.corners[0][1]);
     },
   },
@@ -293,6 +309,7 @@ const Mrooms = {
       c.put(Q.cafeTable(), c.hw * 0.45, -0.3, 0, true);
       c.put(Q.jukebox(), c.corners[0][0], c.corners[0][1], Math.atan2(-c.corners[0][0], -c.corners[0][1]), true);
       c.put(Q.plant(), c.corners[1][0], c.corners[1][1]);
+      c.wall(Q.sofa(2.0, 0x4a2a1a), c.free.find((x) => x !== 's') || 'w', 0, 0.5, true);
       c.hang(P.chochin(), 0, 0);
     },
   },
@@ -391,7 +408,10 @@ const Mrooms = {
     build(c) {
       c.wall(Q.nagamochi(), 's', -0.4, 0.4, true);
       c.wall(Q.nagamochi(), 's', 0.4, 0.4, true);
-      c.wall(Q.armorBox(), 'w', 0.3, 0.4, true);
+      c.wall(Q.armorBox(), 'w', 0.3, 0.5, true);
+      c.wall(Q.armorBox(), 'w', -0.4, 0.5, true);
+      for (let i = 0; i < 3; i++) c.put(Q.sakeBarrel(), c.corners[1][0] - i * 0.7, c.corners[1][1], i, true);
+      c.wall(P.byobu(2.2), 's', 0.7, 0.4);
       const len = Math.min(2.4, c.hd * 2 - 1.2);
       c.wall(P.fillShelf(P.shelf(len, 2.0, 0.45, 4, 0x3a2a1a), c.R, len, 0.45, (R) => (R.chance(0.6) ? P.jar(R) : P.crate(0.3, 0.2, 0.3))), 'e', 0, 0.25, true);
       c.put(Q.ladder(), c.corners[2][0] * 0.8, c.corners[2][1] * 0.8, 0.8);

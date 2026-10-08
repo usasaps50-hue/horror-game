@@ -5,6 +5,7 @@ import { M, T } from './textures.js';
 import { mbox, mergedMesh } from './geo.js';
 import { H, KAMOI, plainWall, ceiling, glassDoor, ceilingLamp } from './architecture.js';
 import * as P from './props.js';
+import { model } from './models.js';
 
 const steamTex = (() => {
   const c = document.createElement('canvas');
@@ -92,6 +93,13 @@ function washStation(R, withShower = true) {
     head.rotation.x = 0.5;
   }
   // 椅子と黄色い桶
+  const set = model('bathset', { h: 0.42 });
+  if (set) {
+    set.position.set(-0.05, 0, 0.55);
+    set.rotation.y = R.range(-0.3, 0.3);
+    g.add(set);
+    return g;
+  }
   const stool = new THREE.Group();
   P.box(0.32, 0.03, 0.26, P.mat(R.pick([0xe0dcd0, 0xd88a3a, 0x9ab8c8])), 0, 0.22, 0, stool);
   P.box(0.28, 0.22, 0.03, P.mat(0xcfcac0), 0, 0, -0.1, stool);

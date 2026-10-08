@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { mulberry32, makeRandom } from './rng.js';
 import { initTextures } from './textures.js';
+import { loadModels } from './models.js';
 import { buildRyokan } from './building.js';
 import { FH, U, GRID_W, GRID_H, FLOORS } from './plan.js';
 
@@ -69,7 +70,9 @@ function applySettings() {
 applySettings();
 
 // ---------- 読み込み ----------
+const loadingEl = document.getElementById('loading');
 await initTextures();
+await loadModels((p) => (loadingEl.textContent = `読み込み中…… ${Math.round(p * 100)}%`));
 const gltf = await new GLTFLoader().loadAsync('assets/models/zashiki_warashi.glb');
 const world = buildRyokan(R);
 scene.add(world.root);

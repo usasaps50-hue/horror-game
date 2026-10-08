@@ -34,7 +34,8 @@ npx http-server . -p 8123 -c-1
 - `src/rooms.js` 部屋のなかみ（40 種類）
 - `src/bath.js` 大浴場（脱衣所・富士山の壁画・ひのきの湯船・洗い場・湯気）
 - `src/architecture.js` 障子・ふすま・格子戸・ガラス戸・のれん、柱／長押／欄間つきの壁、竿縁天井
-- `src/props.js` `src/props2.js` 家具・小物
+- `src/models.js` 家具の 3D モデル（`assets/models/props/` の 30 個。Higgsfield で画像を作り、Tripo で 3D 化して圧縮）
+- `src/props.js` `src/props2.js` 家具・小物（3D モデルがあればそれを使い、なければ箱で組んだ家具）
 - `src/textures.js` 素材（`assets/textures/` の画像は Higgsfield で生成）
 - `src/main.js` 操作（階段の上り下り・小学生の目線）・設定・地図・灯り
 - `assets/models/zashiki_warashi.glb` 座敷童子の 3D モデル（Higgsfield / Meshy で生成）

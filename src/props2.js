@@ -2,8 +2,17 @@
 import * as THREE from 'three';
 import { M, T } from './textures.js';
 import { mat, glow, box, cyl, sphere, plane, lightMarker, C } from './props.js';
+import { model } from './models.js';
 
 const group = () => new THREE.Group();
+
+// Higgsfield の 3D モデルがあればそれを使う（light: [x, y, z, color, intensity, range]）
+function use(name, fit, light) {
+  const m = model(name, fit);
+  if (!m) return null;
+  if (light) lightMarker(m, ...light);
+  return m;
+}
 
 function canvasMat(w, h, draw, o = {}) {
   const c = document.createElement('canvas');
@@ -37,6 +46,8 @@ export function textPlane(lines, w, h, { bg = '#e8e0cc', fg = '#1a1410', size = 
 
 // ---------- ロビー・喫茶 ----------
 export function sofa(w = 1.8, color = 0x5a3a2a) {
+  const mdl = use('sofa', { w });
+  if (mdl) return mdl;
   const g = group();
   const m = mat(color, { roughness: 0.7 });
   box(w, 0.42, 0.85, m, 0, 0, 0, g);
@@ -160,6 +171,8 @@ export function cafeTable() {
 }
 
 export function jukebox() {
+  const mdl = use('jukebox', { h: 1.5 }, [0, 1.2, 0.5, 0xff9030, 1.8, 4]);
+  if (mdl) return mdl;
   const g = group();
   box(0.8, 1.2, 0.5, mat(0x5a1a1a, { roughness: 0.3 }), 0, 0, 0, g);
   const top = cyl(0.4, 0.4, 0.5, glow(0xffd080, 0xff8a20, 1.2), 0, 1.2, 0, g, 20);
@@ -172,6 +185,8 @@ export function jukebox() {
 
 // ---------- カラオケ ----------
 export function karaokeTV() {
+  const mdl = use('karaoke', { h: 1.5 }, [0, 1.1, 0.8, 0x6688ff, 2, 5]);
+  if (mdl) return mdl;
   const g = group();
   box(1.0, 0.6, 0.5, mat(0x1a1a1a), 0, 0, 0, g);
   box(0.95, 0.75, 0.6, mat(0x222220), 0, 0.6, 0, g);
@@ -211,6 +226,8 @@ export function mirrorBall() {
 
 // ---------- 従業員・洗濯 ----------
 export function locker(n = 4) {
+  const mdl = use('locker', { w: n * 0.44 });
+  if (mdl) return mdl;
   const g = group();
   for (let i = 0; i < n; i++) {
     box(0.42, 1.8, 0.5, mat(0x7a8a8a, { metalness: 0.5, roughness: 0.4 }), -((n - 1) * 0.44) / 2 + i * 0.44, 0, 0, g);
@@ -248,6 +265,8 @@ export function timeCard() {
 }
 
 export function washingMachine(open = false) {
+  const mdl = use('washer', { h: 0.85 });
+  if (mdl) return mdl;
   const g = group();
   box(0.6, 0.85, 0.6, mat(0xe8e8e0, { roughness: 0.4 }), 0, 0, 0, g);
   const door = cyl(0.2, 0.2, 0.03, mat(0x7a8a90, { transparent: true, opacity: 0.6, roughness: 0.1 }), 0, 0, 0, g, 24);
@@ -298,6 +317,8 @@ export function riceBags(n = 6) {
 }
 
 export function sakeBarrel() {
+  const mdl = use('sakedaru', { h: 0.7 });
+  if (mdl) return mdl;
   const g = group();
   cyl(0.32, 0.32, 0.6, mat(0xc8b08a), 0, 0, 0, g, 18);
   for (const y of [0.08, 0.5]) cyl(0.335, 0.335, 0.05, mat(0x3a2a1a), 0, y, 0, g, 18);
@@ -316,6 +337,8 @@ export function nagamochi() {
 }
 
 export function armorBox() {
+  const mdl = use('yoroi', { h: 1.5 });
+  if (mdl) return mdl;
   const g = group();
   box(0.6, 0.6, 0.6, mat(0x1a0a0a, { roughness: 0.3 }), 0, 0, 0, g);
   // 兜
@@ -327,6 +350,8 @@ export function armorBox() {
 }
 
 export function bookshelf(R, w = 2.0, h = 2.2) {
+  const mdl = use('bookshelf', { w, h, d: 0.36 });
+  if (mdl) return mdl;
   const g = group();
   const m = mat(0x3a2412);
   for (const s of [-1, 1]) box(0.04, h, 0.35, m, s * (w / 2 - 0.02), 0, 0, g);
@@ -394,6 +419,8 @@ export function sinkCounter(n = 4) {
 }
 
 export function boilerTank() {
+  const mdl = use('boiler', { h: 2.4 }, [0, 1.6, 1.0, 0xff3010, 1.5, 4]);
+  if (mdl) return mdl;
   const g = group();
   const t = cyl(0.7, 0.7, 2.2, mat(0x5a5048, { metalness: 0.6, roughness: 0.5 }), 0, 0.3, 0, g, 20);
   for (const y of [0.5, 1.4, 2.3]) cyl(0.72, 0.72, 0.05, mat(0x3a3028, { metalness: 0.6 }), 0, y, 0, g, 20);
@@ -477,6 +504,8 @@ export function shimenawa(w = 1.6) {
 }
 
 export function altar() {
+  const mdl = use('kamidana', { h: 2.0 });
+  if (mdl) return mdl;
   const g = group();
   box(1.6, 0.9, 0.7, mat(0xd8c8a0, { roughness: 0.5 }), 0, 0, 0, g);
   box(1.0, 0.3, 0.5, mat(0xd8c8a0), 0, 0.9, -0.05, g);
@@ -603,6 +632,8 @@ export function ashtray() {
 }
 
 export function safeBox() {
+  const mdl = use('safe', { h: 0.75 });
+  if (mdl) return mdl;
   const g = group();
   box(0.6, 0.7, 0.55, mat(0x2a3a2a, { metalness: 0.5, roughness: 0.4 }), 0, 0, 0, g);
   const dial = cyl(0.07, 0.07, 0.03, mat(0xc0c0b0, { metalness: 0.8 }), 0, 0.42, 0.29, g, 16);
@@ -658,6 +689,8 @@ export function bamboo(R, h = 6) {
 }
 
 export function gravestone(R) {
+  const mdl = use('gravestone', { h: R.range(1.1, 1.4) });
+  if (mdl) return mdl;
   const g = group();
   box(0.6, 0.15, 0.5, M.stone, 0, 0, 0, g);
   box(0.45, 0.15, 0.4, M.stone, 0, 0.15, 0, g);
@@ -681,6 +714,8 @@ export function sotoba(R) {
 }
 
 export function jizo(R) {
+  const mdl = use('jizo', { h: 0.8 });
+  if (mdl) return mdl;
   const g = group();
   box(0.4, 0.2, 0.35, M.stone, 0, 0, 0, g);
   const b = cyl(0.13, 0.17, 0.45, M.stone, 0, 0.2, 0, g, 10);

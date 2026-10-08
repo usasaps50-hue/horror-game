@@ -51,6 +51,7 @@ export function mergeStatic(root) {
     g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld));
     if (g.index) g = g.toNonIndexed();
     for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k);
+    if (!g.attributes.normal) g.computeVertexNormals();
     if (!g.attributes.uv) {
       g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array((g.attributes.position.count) * 2), 2));
     }

@@ -11,7 +11,8 @@
 </style>
 </head>
 <body>
-<model-viewer src="../assets/models/zashiki_warashi.glb" camera-controls auto-rotate
+<model-viewer id="mv" src="../assets/models/zashiki_warashi.glb" camera-controls auto-rotate
   shadow-intensity="1" exposure="1" camera-orbit="0deg 80deg 2.4m" field-of-view="30deg"></model-viewer>
+<script>const s=new URLSearchParams(location.search).get("src"); if(s) document.getElementById("mv").src=s; const o=new URLSearchParams(location.search).get("orbit"); if(o){document.getElementById("mv").cameraOrbit=o; document.getElementById("mv").autoRotate=false;}</script>
 </body>
 </html>

@@ -1,6 +1,7 @@
 // 家具・小物。どれも「床が原点・正面が +z」の Group を返す
 import * as THREE from 'three';
 import { T, M } from './textures.js';
+import { model } from './models.js';
 
 const cache = new Map();
 export function mat(color, o = {}) {
@@ -58,8 +59,20 @@ export function lightMarker(parent, x, y, z, color = 0xffa050, intensity = 3, ra
 }
 const group = () => new THREE.Group();
 
+// Higgsfield の 3D モデルがあればそれを使う（light: [x, y, z, color, intensity, range]）
+function use(name, fit, light) {
+  const m = model(name, fit);
+  if (!m) return null;
+  if (light) lightMarker(m, ...light);
+  return m;
+}
+
 // ---------- 和室まわり ----------
 export function lowTable(w = 1.4, d = 0.9, h = 0.33) {
+  if (w >= 0.9 && w <= 2.2 && d >= 0.5) {
+    const mdl = use('chabudai', { w, h: h + 0.12, d });
+    if (mdl) return mdl;
+  }
   const g = group();
   box(w, 0.05, d, mat(0x2e1a0c, { roughness: 0.35 }), 0, h - 0.05, 0, g);
   for (const sx of [-1, 1])
@@ -68,12 +81,16 @@ export function lowTable(w = 1.4, d = 0.9, h = 0.33) {
 }
 
 export function zabuton(color = 0x6e2626) {
+  const mdl = use('zabuton', { w: 0.62 });
+  if (mdl) return mdl;
   const g = group();
   box(0.55, 0.07, 0.6, mat(color), 0, 0, 0, g);
   return g;
 }
 
 export function futon(color = 0x4a6a8a, messy = 0) {
+  const mdl = use('futon', { d: 2.05 });
+  if (mdl) return mdl;
   const g = group();
   box(1.0, 0.1, 2.0, mat(C.cloth), 0, 0, 0, g);
   const b = box(0.98, 0.08, 1.45, mat(color), 0, 0.1, 0.25, g);
@@ -83,6 +100,8 @@ export function futon(color = 0x4a6a8a, messy = 0) {
 }
 
 export function andon() {
+  const mdl = use('andon', { h: 0.8 }, [0, 0.45, 0, 0xff9a48, 2.5, 5]);
+  if (mdl) return mdl;
   const g = group();
   box(0.36, 0.04, 0.36, mat(C.dark), 0, 0, 0, g);
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(0.03, 0.7, 0.03, mat(C.dark), sx * 0.15, 0, sz * 0.15, g);
@@ -129,6 +148,8 @@ export function teaSet() {
 }
 
 export function crtTv() {
+  const mdl = use('crttv', { h: 0.95 }, [0, 0.6, 0.5, 0x8899ff, 1.5, 3.5]);
+  if (mdl) return mdl;
   const g = group();
   box(0.6, 0.35, 0.4, mat(0x1a1a1a), 0, 0, 0, g);
   box(0.55, 0.45, 0.45, mat(0x2a2722), 0, 0.35, 0, g);
@@ -145,6 +166,8 @@ export function bag(color) {
 }
 
 export function byobu(w = 2.4, h = 1.5) {
+  const mdl = use('byobu', { w });
+  if (mdl) return mdl;
   const g = group();
   const n = 6, pw = w / n;
   const m = texMat(T.byobu);
@@ -158,6 +181,8 @@ export function byobu(w = 2.4, h = 1.5) {
 }
 
 export function ozen() {
+  const mdl = use('ozen', { w: 0.4 });
+  if (mdl) return mdl;
   const g = group();
   box(0.36, 0.12, 0.32, mat(0x5a0f0c, { roughness: 0.3 }), 0, 0, 0, g);
   cyl(0.06, 0.04, 0.05, mat(C.black, { roughness: 0.3 }), -0.08, 0.12, 0, g);
@@ -230,6 +255,8 @@ export function tansu() {
 }
 
 export function dresser() {
+  const mdl = use('kyodai', { h: 1.3 });
+  if (mdl) return mdl;
   const g = group();
   box(0.6, 0.35, 0.35, mat(0x3a0e0b, { roughness: 0.3 }), 0, 0, 0, g);
   box(0.4, 0.6, 0.04, mat(0x9aa4a8, { metalness: 0.8, roughness: 0.1 }), 0, 0.4, -0.08, g);
@@ -272,6 +299,8 @@ export function washStation() {
 }
 
 export function stove() {
+  const mdl = use('stove', { w: 1.2 });
+  if (mdl) return mdl;
   const g = group();
   box(1.2, 0.85, 0.6, mat(0x777a7c, { metalness: 0.7, roughness: 0.35 }), 0, 0, 0, g);
   for (const x of [-0.3, 0.3]) {
@@ -312,6 +341,8 @@ export function clock() {
 }
 
 export function vendingMachine() {
+  const mdl = use('vending', { h: 1.85 }, [0, 1.0, 0.7, 0xcfe4ff, 4, 6]);
+  if (mdl) return mdl;
   const g = group();
   box(1.0, 1.85, 0.75, mat(0xb02020, { roughness: 0.4 }), 0, 0, 0, g);
   plane(0.85, 1.6, mat(0xffffff, { map: T.vending, emissive: 0xffffff, emissiveMap: T.vending, emissiveIntensity: 1.1 }), 0, 0.98, 0.376, g);
@@ -360,6 +391,8 @@ export function bokutoRack(R) {
 
 // ---------- 仏間・人形 ----------
 export function butsudan() {
+  const mdl = use('butsudan', { h: 1.5 }, [0, 0.75, 0.4, 0xff9a30, 2.2, 4]);
+  if (mdl) return mdl;
   const g = group();
   box(1.0, 1.5, 0.55, mat(0x0a0706, { roughness: 0.2 }), 0, 0, 0, g);
   box(0.8, 1.1, 0.02, glow(0x8a6a20, 0x6a4a10, 0.5), 0, 0.3, 0.2, g);
@@ -381,6 +414,11 @@ export function portraitFrame() {
 }
 
 export function doll(R, scale = 1) {
+  const md = use('hinadoll', { h: 0.3 * scale });
+  if (md) {
+    md.userData.w = 0.2 * scale;
+    return md;
+  }
   const g = group();
   const kimonoCol = R ? R.pick([0x8a1a1a, 0x1a2a6a, 0x6a1a5a, 0xc89a20, 0x1a5a3a]) : 0x8a1a1a;
   const body = cyl(0.04, 0.09, 0.2, mat(kimonoCol), 0, 0, 0, g);
@@ -394,6 +432,8 @@ export function doll(R, scale = 1) {
 }
 
 export function hinaDan(R, w = 2.6) {
+  const mdl = use('hinadan', { w });
+  if (mdl) return mdl;
   const g = group();
   const red = mat(0xa01414, { roughness: 0.7 });
   const steps = 5;
@@ -454,6 +494,8 @@ export function ofuda() {
 
 // ---------- 庭 ----------
 export function stoneLantern() {
+  const mdl = use('toro', { h: 1.5 }, [0, 0.95, 0, 0xff8a40, 1.5, 4]);
+  if (mdl) return mdl;
   const g = group();
   const s = M.stone;
   box(0.5, 0.15, 0.5, s, 0, 0, 0, g);
@@ -481,6 +523,8 @@ export function pine(R) {
 }
 
 export function well() {
+  const mdl = use('well', { h: 1.9 });
+  if (mdl) return mdl;
   const g = group();
   const ring = new THREE.Mesh(
     new THREE.CylinderGeometry(0.6, 0.6, 0.7, 20, 1, true),
@@ -568,6 +612,8 @@ export function welcomeBoard() {
 }
 
 export function tanuki() {
+  const mdl = use('tanuki', { h: 0.95 });
+  if (mdl) return mdl;
   const g = group();
   const m = mat(0x6a4a2a, { roughness: 0.4 });
   const body = sphere(0.32, m, 0, 0.32, 0, g);
