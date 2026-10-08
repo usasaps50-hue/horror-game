@@ -1,7 +1,7 @@
 // plan.js の間取りから、3 階建ての旅館を組み立てる
 // 1.2m のマス目に「廊下・部屋・何もない」を塗り、境目に自動で壁・戸・窓を立てる。
 import * as THREE from 'three';
-import { M } from './textures.js';
+import { M, T } from './textures.js';
 import { mbox, mergeStatic } from './geo.js';
 import {
   H, KAMOI, WT, wallRun, ceiling, tatamiFloor, ceilingLamp, koshiDoor, fusumaPanel, glassDoor, shojiPanel,
@@ -68,8 +68,8 @@ export function buildRyokan(R) {
           }
         }
     }
-    const rooms = plan.rooms.map(([type, x, y, w, h, door], idx) => {
-      const room = { id: `${f}-${idx}`, type, def: ROOM_TYPES[type], floor: f, x, y, w, h, door, x0: x * U, x1: (x + w) * U, z0: y * U, z1: (y + h) * U };
+    const rooms = plan.rooms.map(([type, x, y, w, h, doors], idx) => {
+      const room = { id: `${f}-${idx}`, type, def: ROOM_TYPES[type], floor: f, x, y, w, h, door: doors[0], doors: [...doors], x0: x * U, x1: (x + w) * U, z0: y * U, z1: (y + h) * U };
       const cell = { kind: 'room', room };
       for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) set(i, j, cell);
       world.rooms.push(room);
@@ -124,16 +124,21 @@ export function buildRyokan(R) {
       const across = room.door === 'n' || room.door === 's';
       const hw = (across ? w : d) / 2 - 0.06;
       const hd = (across ? d : w) / 2 - 0.06;
-      def.build(makeCtx(inner, hw, hd, R, world));
+      const order = ['n', 'e', 's', 'w'];
+      const extra = room.doors.slice(1).map((d) => order[(order.indexOf(d) - order.indexOf(room.door) + 4) % 4]);
+      def.build(makeCtx(inner, hw, hd, R, world, extra));
+      inner.children.forEach((o) => (o.userData.room = room.type));
     }
 
     // ---------- 入口の位置 ----------
     const doorEdges = new Map();
     for (const room of rooms) {
-      const { x, y, w, h, door } = room;
+      const { x, y, w, h } = room;
       const mx = x + Math.floor((w - 1) / 2), my = y + Math.floor((h - 1) / 2);
-      const key = { n: `h:${mx}:${y}`, s: `h:${mx}:${y + h}`, w: `v:${x}:${my}`, e: `v:${x + w}:${my}` }[door];
-      doorEdges.set(key, room);
+      for (const d of room.doors) {
+        const key = { n: `h:${mx}:${y}`, s: `h:${mx}:${y + h}`, w: `v:${x}:${my}`, e: `v:${x + w}:${my}` }[d];
+        if (!doorEdges.has(key)) doorEdges.set(key, room);
+      }
     }
 
     // ---------- 壁 ----------
@@ -218,8 +223,8 @@ export function buildRyokan(R) {
       box.setFromObject(o);
       const c = o.userData.doorCollider
         ? { minX: box.min.x, maxX: box.max.x, minZ: box.min.z, maxZ: box.max.z, door: o.userData.doorCollider }
-        : { minX: box.min.x + 0.03, maxX: box.max.x - 0.03, minZ: box.min.z + 0.03, maxZ: box.max.z - 0.03 };
-      world.colliders[floorOf(box.min.y)].push(c);
+        : { minX: box.min.x + 0.03, maxX: box.max.x - 0.03, minZ: box.min.z + 0.03, maxZ: box.max.z - 0.03, src: o.userData.room || o.parent?.userData.room || o.userData.model };
+      world.colliders[floorOf((box.min.y + box.max.y) / 2 - 0.2)].push(c);
     }
     if (o.userData.light) {
       const pos = o.getWorldPosition(new THREE.Vector3());
@@ -348,20 +353,49 @@ function plateMesh(text) {
 }
 
 // ---------- 部屋のなかみ用の ctx（rooms.js から使う） ----------
-function makeCtx(g, hw, hd, R, world) {
-  const free = R.shuffle(['w', 'e', 's']);
+function makeCtx(g, hw, hd, R, world, extraDoors = []) {
+  const free = R.shuffle(['w', 'e', 's'].filter((x) => !extraDoors.includes(x)));
   const ci = 0.75;
-  const corners = R.shuffle([[-hw + ci, hd - ci], [hw - ci, hd - ci], [-hw + ci, -hd + ci + 0.6], [hw - ci, -hd + ci + 0.6]]);
+  let back = 0; // 広縁のぶん、奥の壁を手前に見なす
+  let corners = R.shuffle([[-hw + ci, hd - ci], [hw - ci, hd - ci], [-hw + ci, -hd + ci + 0.6], [hw - ci, -hd + ci + 0.6]]);
   const alongWall = (side, t, depth) => {
+    const hd2 = hd - back;
     switch (side) {
       case 'n': return [t * (hw - 0.3), -hd + depth, 0];
-      case 's': return [-t * (hw - 0.3), hd - depth, Math.PI];
-      case 'w': return [-hw + depth, -t * (hd - 0.3), Math.PI / 2];
-      default: return [hw - depth, t * (hd - 0.3), -Math.PI / 2];
+      case 's': return [-t * (hw - 0.3), hd2 - depth, Math.PI];
+      case 'w': return [-hw + depth, -t * (hd - 0.3) - back / 2, Math.PI / 2];
+      default: return [hw - depth, t * (hd - 0.3) - back / 2, -Math.PI / 2];
     }
   };
   const c = {
-    g, R, hw, hd, free, corners,
+    g, R, hw, hd, free, corners, extraDoors,
+    // 客室の奥の広縁：板の間・開けた障子・いすとテーブル・窓
+    hiroen(depth = 1.4) {
+      back = depth;
+      const z = hd - depth;
+      mbox(hw * 2, 0.014, depth, M.woodFloor, 0, 0, hd - depth / 2, g);
+      mbox(hw * 2, 0.1, 0.12, M.darkWood, 0, KAMOI, z, g);
+      mbox(hw * 2, H - KAMOI - 0.1, 0.06, M.plaster, 0, KAMOI + 0.1, z, g);
+      mbox(hw * 2, 0.03, 0.12, M.darkWood, 0, 0, z, g);
+      for (const sx of [-1, 1]) {
+        mbox(0.12, H, 0.12, M.darkWood, sx * (hw - 0.06), 0, z, g, false);
+        const p = shojiPanel(0.9, KAMOI - 0.03, M.washiWarm);
+        p.position.set(sx * (hw - 0.6), 0.03, z + sx * 0.02);
+        g.add(p);
+      }
+      const win = new THREE.Mesh(new THREE.PlaneGeometry(hw * 2 - 0.5, 1.4), windowMat());
+      win.position.set(0, 1.15, hd - 0.03);
+      win.rotation.y = Math.PI;
+      g.add(win);
+      const cs = Pr.chairSet();
+      cs.position.set(hw > 2.6 ? hw * 0.35 : 0, 0, hd - depth / 2);
+      cs.userData.solid = true;
+      g.add(cs);
+      const ci2 = 0.75;
+      corners = R.shuffle([[-hw + ci2, z - ci2], [hw - ci2, z - ci2], [-hw + ci2, -hd + ci2 + 0.6], [hw - ci2, -hd + ci2 + 0.6]]);
+      c.corners = corners;
+      c.hd2 = z;
+    },
     doors: world.doors, interactables: world.interactables, updaters: world.updaters,
     put(obj, x, z, ry = 0, solid = false) {
       obj.position.x = x;
@@ -461,6 +495,12 @@ function makeCtx(g, hw, hd, R, world) {
     },
   };
   return c;
+}
+
+let _win;
+function windowMat() {
+  if (!_win) _win = new THREE.MeshStandardMaterial({ map: T.moonWindow, emissive: 0xffffff, emissiveMap: T.moonWindow, emissiveIntensity: 0.6, roughness: 0.2 });
+  return _win;
 }
 
 let _steam;
