@@ -75,9 +75,23 @@ applySettings();
 
 // ---------- 読み込み ----------
 const loadingEl = document.getElementById('loading');
+const setLoad = (p, label = '') => (loadingEl.textContent = `読み込み中…… ${Math.min(99, Math.round(p * 100))}%${label}`);
+// 読み込みの途中で失敗したら、画面に出す
+const showError = (e) => {
+  if (!loadingEl.isConnected) return;
+  loadingEl.textContent = `読み込みに失敗しました（${e?.message || e}）。ページを再読み込みしてください`;
+};
+addEventListener('error', (e) => showError(e.error || e.message));
+addEventListener('unhandledrejection', (e) => showError(e.reason));
+setLoad(0);
 await initTextures();
-await loadModels((p) => (loadingEl.textContent = `読み込み中…… ${Math.round(p * 100)}%`));
-const gltf = await new GLTFLoader().loadAsync('assets/models/zashiki_warashi.glb');
+setLoad(0.1);
+await loadModels((p) => setLoad(0.1 + p * 0.5, '（家具）'));
+const gltf = await new GLTFLoader().loadAsync('assets/models/zashiki_warashi.glb', (ev) => {
+  if (ev.total) setLoad(0.6 + (ev.loaded / ev.total) * 0.3, '（座敷童子）');
+});
+setLoad(0.92, '（旅館を組み立て中）');
+await new Promise((r) => setTimeout(r, 50));
 const world = buildRyokan(R);
 scene.add(world.root);
 
@@ -314,7 +328,7 @@ function die() {
   seeker.pos.set(camera.position.x + f.x * 0.55, groundY, camera.position.z + f.z * 0.55);
   seeker.obj.position.copy(seeker.pos);
   seeker.obj.rotation.y = yaw;
-  pitch = 0.05;
+  pitch = -0.32; // 小さな子の顔を見下ろす
   deathEl.className = 'flash';
   setTimeout(() => (deathEl.className = 'black'), 1100);
   setTimeout(() => {
