@@ -4,6 +4,10 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { mulberry32, makeRandom } from './rng.js';
 import { initTextures } from './textures.js';
 import { loadModels } from './models.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { GameAudio } from './audio.js';
+import { Nav } from './nav.js';
+import { Seeker } from './zashiki.js';
 import { buildRyokan } from './building.js';
 import { FH, U, GRID_W, GRID_H, FLOORS } from './plan.js';
 
@@ -90,6 +94,16 @@ if (world.spawns.zashiki) {
   scene.add(m);
 }
 const mixer = new THREE.AnimationMixer(gltf.scene);
+const audio = new GameAudio();
+const seekerModel = SkeletonUtils.clone(gltf.scene);
+seekerModel.position.set(0, 0, 0);
+seekerModel.quaternion.identity();
+const seeker = new Seeker({
+  world, nav: new Nav(world), scene, model: seekerModel, audio, R,
+  onCatch: () => die(),
+  onSay: (t) => subtitle(t),
+});
+let gameStarted = false;
 if (gltf.animations[0]) mixer.clipAction(gltf.animations[0]).play();
 document.getElementById('loading').remove();
 document.getElementById('seed').textContent = `seed ${seed}`;
@@ -107,7 +121,14 @@ let pitch = 0;
 const overlay = document.getElementById('overlay');
 const startBtn = document.getElementById('start');
 let locked = false;
-startBtn.addEventListener('click', () => renderer.domElement.requestPointerLock());
+startBtn.addEventListener('click', () => {
+  audio.resume();
+  renderer.domElement.requestPointerLock();
+  if (!gameStarted) {
+    gameStarted = true;
+    seeker.start(20);
+  }
+});
 document.addEventListener('pointerlockchange', () => {
   locked = document.pointerLockElement === renderer.domElement;
   overlay.classList.toggle('hidden', locked);
@@ -196,13 +217,58 @@ function updateTarget() {
   ray.setFromCamera(center, camera);
   const hit = ray.intersectObjects(world.interactables.filter((o) => o.userData.floor === floor), true)[0];
   target = hit ? hit.object : null;
+  // 隠れ場所のほうが近ければ、そちらを優先
+  hideTarget = findHideSpot();
+  if (hideTarget && hit && hideTarget.dist < hit.distance) target = null;
   const door = target?.userData.door;
   if (door) prompt.textContent = door.open ? 'E　閉める' : 'E　開ける';
   else if (target?.userData.note) prompt.textContent = 'E　調べる';
+  else if (hideTarget) prompt.textContent = `E　${HIDE_NAME[hideTarget.type]}`;
   else prompt.textContent = '';
+  if (hiding || dead) prompt.textContent = '';
+}
+
+// ---------- 隠れる ----------
+const hideEl = document.getElementById('hide');
+const HIDE_NAME = { futon: '布団に隠れる', locker: 'ロッカーに隠れる', chest: '長持に隠れる' };
+let hideTarget = null;
+let hiding = null; // { spot, back: {x, z, yaw} }
+function findHideSpot() {
+  if (hiding || dead) return null;
+  let best = null, bd = 1.5;
+  for (const s of world.hideSpots) {
+    if (s.floor !== floor) continue;
+    const dx = s.pos.x - camera.position.x, dz = s.pos.z - camera.position.z;
+    const d = Math.hypot(dx, dz);
+    if (d > bd) continue;
+    const ang = Math.atan2(-dx, -dz) - yaw;
+    if (Math.cos(ang) < 0.55) continue;
+    [best, bd] = [s, d];
+  }
+  if (best) best.dist = bd;
+  return best;
+}
+function enterHide(s) {
+  hiding = { spot: s, back: { x: camera.position.x, z: camera.position.z, yaw } };
+  const y = { futon: 0.22, locker: 1.25, chest: 0.4 }[s.type];
+  camera.position.set(s.pos.x, s.floor * FH + y, s.pos.z);
+  yaw = s.yaw + Math.PI;
+  pitch = s.type === 'futon' ? 0.05 : 0;
+  hideEl.className = `show ${s.type}`;
+  toast('じっとしていよう……　E で出る', 1800);
+}
+function exitHide() {
+  const b = hiding.back;
+  camera.position.set(b.x, groundY + EYE, b.z);
+  yaw = b.yaw;
+  hiding = null;
+  hideEl.className = '';
 }
 
 function interact() {
+  if (dead) return;
+  if (hiding) return exitHide();
+  if (!target && hideTarget) return enterHide(hideTarget);
   if (!target) return;
   if (target.userData.note) return toast(target.userData.note);
   const door = target.userData.door;
@@ -227,6 +293,42 @@ function toast(text, ms = 2200) {
   toastEl.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toastEl.classList.remove('show'), ms);
+}
+
+const subEl = document.getElementById('subtitle');
+let subTimer;
+function subtitle(text) {
+  subEl.textContent = '「' + text + '」';
+  subEl.classList.add('show');
+  clearTimeout(subTimer);
+  subTimer = setTimeout(() => subEl.classList.remove('show'), 2600);
+}
+
+let dead = false;
+const deathEl = document.getElementById('death');
+function die() {
+  dead = true;
+  if (hiding) exitHide();
+  // 目の前に座敷童子
+  const f = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+  seeker.pos.set(camera.position.x + f.x * 0.55, groundY, camera.position.z + f.z * 0.55);
+  seeker.obj.position.copy(seeker.pos);
+  seeker.obj.rotation.y = yaw;
+  pitch = 0.05;
+  deathEl.className = 'flash';
+  setTimeout(() => (deathEl.className = 'black'), 1100);
+  setTimeout(() => {
+    // 六年二組の部屋で目をさます
+    floor = world.start.floor;
+    groundY = floor * FH;
+    camera.position.copy(world.start.pos).setY(groundY + EYE);
+    yaw = world.start.yaw;
+    pitch = 0;
+    seeker.start(12);
+    deathEl.className = '';
+    dead = false;
+    toast('……ゆめ？', 2000);
+  }, 3600);
 }
 
 const inRect = (r, x, z) => x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1;
@@ -295,11 +397,12 @@ let bob = 0;
 let lightTimer = 0;
 let assigned = [];
 let elapsed = 0;
+let heartTimer = 0;
 
 function update(dt) {
   elapsed += dt;
   camera.rotation.set(pitch, yaw, 0);
-  if (locked) {
+  if (locked && !hiding && !dead) {
     fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw));
     right.set(Math.cos(yaw), 0, -Math.sin(yaw));
     const run = keys.has('ShiftLeft') || keys.has('ShiftRight');
@@ -342,6 +445,17 @@ function update(dt) {
     u.userData.update(dt, elapsed, near);
   }
   mixer.update(dt);
+  audio.updateListener(camera);
+  if (gameStarted && !dead) {
+    seeker.update(dt, { pos: new THREE.Vector3(camera.position.x, groundY, camera.position.z), floor, room: currentRoom, hidden: !!hiding });
+    // 近くにいると心臓の音
+    heartTimer -= dt;
+    const near = seeker.obj.visible && seeker.floor === floor ? seeker.pos.distanceTo(new THREE.Vector3(camera.position.x, groundY, camera.position.z)) : 99;
+    if (near < 10 && heartTimer <= 0) {
+      audio.heartbeat(1 - near / 12);
+      heartTimer = 0.45 + near * 0.08;
+    }
+  }
 
   lightTimer -= dt;
   if (lightTimer <= 0) {
@@ -384,7 +498,10 @@ addEventListener('resize', () => {
 
 // デバッグ用
 window.__game = {
-  world, scene, camera, renderer, seed, settings,
+  world, scene, camera, renderer, seed, settings, seeker, audio,
+  get hiding() { return hiding; },
+  hide: () => hideTarget && enterHide(hideTarget),
+  start: () => { gameStarted = true; seeker.start(0.1); },
   get floor() { return floor; },
   setView(x, z, y, p = 0, f = floor) {
     floor = f;

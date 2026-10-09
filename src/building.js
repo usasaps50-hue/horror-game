@@ -30,7 +30,7 @@ export function buildRyokan(R) {
   const root = new THREE.Group();
   const world = {
     root, doors: [], interactables: [], updaters: [], colliders: FLOORS.map(() => []), lights: [],
-    spawns: {}, rooms: [], stairs: [], grids: [],
+    spawns: {}, rooms: [], stairs: [], grids: [], doorEdgeSets: [], edgeDoors: [], hideSpots: [],
   };
   const chunks = new Map();
   const chunk = (f, x, z) => {
@@ -141,6 +141,10 @@ export function buildRyokan(R) {
       }
     }
 
+    world.doorEdgeSets[f] = new Set(doorEdges.keys());
+    world.doorEdgeRooms = world.doorEdgeRooms || [];
+    world.doorEdgeRooms[f] = doorEdges;
+
     // ---------- 壁 ----------
     const keyOf = (c) => (!c ? 'V' : c.kind === 'corr' ? 'C' : c.room.id);
     const prio = (c) => (!c ? 0 : c.kind === 'corr' ? 3 : c.room.def.outdoor ? 1 : 2);
@@ -230,14 +234,60 @@ export function buildRyokan(R) {
       const pos = o.getWorldPosition(new THREE.Vector3());
       world.lights.push({ pos, floor: floorOf(pos.y - 1), ...o.userData.light, phase: R.next() * 100 });
     }
+    if (o.userData.hide) {
+      const pos = o.getWorldPosition(new THREE.Vector3());
+      const q = o.getWorldQuaternion(new THREE.Quaternion());
+      const f = floorOf(pos.y + 0.5);
+      world.hideSpots.push({ type: o.userData.hide, pos, yaw: new THREE.Euler().setFromQuaternion(q, 'YXZ').y, floor: f, room: world.rooms.find((r) => r.floor === f && pos.x > r.x0 && pos.x < r.x1 && pos.z > r.z0 && pos.z < r.z1) });
+    }
     if (o.userData.spawn) world.spawns[o.userData.spawn] = { pos: o.getWorldPosition(new THREE.Vector3()), quat: o.getWorldQuaternion(new THREE.Quaternion()) };
   });
   for (const o of world.interactables) o.userData.floor = floorOf(o.getWorldPosition(new THREE.Vector3()).y - 0.5);
+  linkOpenings(world);
   for (const g of chunks.values()) mergeStatic(g);
 
   const start = world.rooms.find((r) => r.type === START_ROOM);
   world.start = { pos: start.group.localToWorld(new THREE.Vector3(0, 0, 0.6)), yaw: start.group.rotation.y, floor: start.floor };
   return world;
+}
+
+// 戸・障子窓・のれんを、それぞれの部屋の「開き口」として結びつける
+function linkOpenings(world) {
+  for (const r of world.rooms) r.openings = [];
+  const roomAt = (f, p) => world.rooms.find((r) => r.floor === f && p.x > r.x0 && p.x < r.x1 && p.z > r.z0 && p.z < r.z1);
+  const tmp = new THREE.Vector3();
+  const doorPos = (d) => d.panel.parent.localToWorld(tmp.copy(d.base)).clone();
+  // 入口（戸・のれん）
+  world.doorEdgeRooms.forEach((edges, f) => {
+    world.edgeDoors[f] = new Map();
+    for (const key of edges.keys()) {
+      const [o, a, b] = key.split(':');
+      const x = Number(a), y = Number(b);
+      const mid = o === 'h' ? new THREE.Vector3((x + 0.5) * U, f * FH + 1, y * U) : new THREE.Vector3(x * U, f * FH + 1, (y + 0.5) * U);
+      let best = null, bd = 1.2;
+      for (const d of world.doors) {
+        if (d.window) continue;
+        const p = doorPos(d);
+        if (Math.floor((p.y + 0.5) / FH) !== f) continue;
+        const dist = Math.hypot(p.x - mid.x, p.z - mid.z);
+        if (dist < bd) [best, bd] = [d, dist];
+      }
+      if (best) world.edgeDoors[f].set(key, best);
+      const side = o === 'h' ? [new THREE.Vector3(0, 0, -0.4), new THREE.Vector3(0, 0, 0.4)] : [new THREE.Vector3(-0.4, 0, 0), new THREE.Vector3(0.4, 0, 0)];
+      const rs = new Set(side.map((v) => roomAt(f, mid.clone().add(v))).filter(Boolean));
+      for (const r of rs) r.openings.push({ door: best, key, mid });
+    }
+  });
+  // 障子窓
+  for (const d of world.doors) {
+    if (!d.window) continue;
+    const p = doorPos(d);
+    const f = Math.floor((p.y + 0.5) / FH);
+    for (const v of [[0.45, 0], [-0.45, 0], [0, 0.45], [0, -0.45]]) {
+      const r = roomAt(f, new THREE.Vector3(p.x + v[0], 0, p.z + v[1]));
+      if (r && !r.openings.some((o) => o.door === d)) r.openings.push({ door: d, window: true, mid: p });
+    }
+  }
 }
 
 // 壁を A→B に置く。N は表（廊下側）の向き

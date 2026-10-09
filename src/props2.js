@@ -227,7 +227,10 @@ export function mirrorBall() {
 // ---------- 従業員・洗濯 ----------
 export function locker(n = 4) {
   const mdl = use('locker', { w: n * 0.44 });
-  if (mdl) return mdl;
+  if (mdl) {
+    mdl.userData.hide = 'locker';
+    return mdl;
+  }
   const g = group();
   for (let i = 0; i < n; i++) {
     box(0.42, 1.8, 0.5, mat(0x7a8a8a, { metalness: 0.5, roughness: 0.4 }), -((n - 1) * 0.44) / 2 + i * 0.44, 0, 0, g);
@@ -330,6 +333,7 @@ export function sakeBarrel() {
 
 export function nagamochi() {
   const g = group();
+  g.userData.hide = 'chest';
   box(1.4, 0.65, 0.7, mat(0x3a1a0a, { roughness: 0.35 }), 0, 0, 0, g);
   for (const x of [-0.6, 0.6]) box(0.06, 0.66, 0.72, mat(0x222222, { metalness: 0.7, roughness: 0.4 }), x, 0, 0, g);
   box(0.2, 0.15, 0.02, mat(0x8a7a3a, { metalness: 0.8 }), 0, 0.45, 0.36, g);

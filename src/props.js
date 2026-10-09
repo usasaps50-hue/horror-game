@@ -90,12 +90,16 @@ export function zabuton(color = 0x6e2626) {
 
 export function futon(color = 0x4a6a8a, messy = 0) {
   const mdl = use('futon', { d: 2.05 });
-  if (mdl) return mdl;
+  if (mdl) {
+    mdl.userData.hide = 'futon';
+    return mdl;
+  }
   const g = group();
   box(1.0, 0.1, 2.0, mat(C.cloth), 0, 0, 0, g);
   const b = box(0.98, 0.08, 1.45, mat(color), 0, 0.1, 0.25, g);
   b.rotation.y = messy * 0.3;
   box(0.5, 0.1, 0.3, mat(0xf2efe6), 0, 0.1, -0.75, g);
+  g.userData.hide = 'futon';
   return g;
 }
 
