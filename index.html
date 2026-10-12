@@ -2,7 +2,9 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <title>旅館 ―座敷童子―</title>
 <script type="importmap">
 {
@@ -68,6 +70,48 @@
   #death.flash::after { content: "みーつけた"; }
   #death.black { opacity: 1; background: #000; transition: background 1s; }
   @keyframes shake { 50% { transform: translate(4px, -3px); } }
+  /* ---------- スマホ ---------- */
+  body.touch { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  #touch-ui { display: none; }
+  #touch-ui.show { display: block; }
+  #t-layer { position: fixed; inset: 0; z-index: 3; }
+  #t-stick { position: fixed; width: 110px; height: 110px; margin: -55px 0 0 -55px; border-radius: 50%;
+    border: 2px solid rgba(232,220,192,0.35); background: rgba(0,0,0,0.25); z-index: 6; display: none; pointer-events: none; }
+  #t-stick.show { display: block; }
+  #t-knob { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; border-radius: 50%;
+    background: rgba(232,220,192,0.45); transform: translate(-50%, -50%); }
+  .t-btn { position: fixed; z-index: 7; font: inherit; color: #e8dcc0; background: rgba(10,8,6,0.55);
+    border: 1px solid rgba(232,220,192,0.35); border-radius: 50%; -webkit-tap-highlight-color: transparent; }
+  .t-btn.small { width: 54px; height: 54px; font-size: 13px; }
+  #t-action { right: calc(26px + env(safe-area-inset-right)); bottom: 34px; width: 96px; height: 96px; font-size: 15px;
+    opacity: 0.35; line-height: 1.2; padding: 6px; }
+  #t-action.ready { opacity: 1; border-color: rgba(232,220,192,0.8); }
+  #t-run { right: calc(136px + env(safe-area-inset-right)); bottom: 30px; }
+  #t-run.on { background: rgba(160,40,30,0.6); }
+  #t-flash { right: calc(136px + env(safe-area-inset-right)); bottom: 96px; }
+  #t-map { right: calc(30px + env(safe-area-inset-right)); bottom: 150px; }
+  #t-pause { left: calc(16px + env(safe-area-inset-left)); top: 14px; width: 44px; height: 44px; }
+  body.touch #prompt { display: none; }
+  body.touch #crosshair { display: none; }
+  body.touch #minimap { width: 150px; height: 150px; right: calc(10px + env(safe-area-inset-right)); top: 10px; }
+  @media (max-height: 520px) {
+    #overlay { gap: 8px; }
+    #overlay h1 { font-size: 30px; }
+    #overlay .story { font-size: 12px; line-height: 1.6; }
+    #overlay .keys { font-size: 11px; line-height: 1.6; }
+    #start { padding: 6px 28px; font-size: 16px; }
+    #settings { gap: 4px 10px; padding-top: 8px; font-size: 12px; }
+    #settings input[type=range] { width: 150px; }
+    #toast { font-size: 20px; top: 12%; }
+    #subtitle { font-size: 18px; }
+    #death { font-size: 44px; }
+  }
+  /* 縦向きのときは横にしてもらう */
+  #rotate { display: none; }
+  @media (orientation: portrait) and (pointer: coarse) {
+    #rotate { display: flex; position: fixed; inset: 0; z-index: 30; background: #000; color: #c8b890; align-items: center;
+      justify-content: center; text-align: center; font-size: 18px; letter-spacing: .2em; line-height: 2; }
+  }
 </style>
 </head>
 <body>
@@ -91,6 +135,7 @@
 <div id="death"></div>
 <canvas id="minimap" width="220" height="220"></canvas>
 <div id="seed"></div>
+<div id="rotate">スマホを横向きにしてください<br>　↻</div>
 <div id="loading">読み込み中……</div>
 <div id="goal">……みつけた<small>奥の間にたどり着いた</small></div>
 <script type="module" src="src/main.js"></script>

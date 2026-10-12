@@ -8,6 +8,7 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { GameAudio } from './audio.js';
 import { Nav } from './nav.js';
 import { Seeker } from './zashiki.js';
+import { IS_TOUCH, setupTouch } from './touch.js';
 import { buildRyokan } from './building.js';
 import { FH, U, GRID_W, GRID_H, FLOORS } from './plan.js';
 
@@ -30,7 +31,7 @@ const R = makeRandom(mulberry32(seed));
 
 // ---------- 描画まわり ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+renderer.setPixelRatio(Math.min(devicePixelRatio, IS_TOUCH ? 1 : 1.5));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -50,7 +51,7 @@ scene.add(new THREE.HemisphereLight(0x34445e, 0x100a06, 0.3));
 
 const flashlight = new THREE.SpotLight(0xfff0d8, 24, 20, 0.45, 0.55, 1.5);
 flashlight.castShadow = true;
-flashlight.shadow.mapSize.set(1024, 1024);
+flashlight.shadow.mapSize.set(IS_TOUCH ? 512 : 1024, IS_TOUCH ? 512 : 1024);
 flashlight.shadow.bias = -0.0004;
 flashlight.shadow.camera.near = 0.1;
 flashlight.position.set(0.18, -0.15, 0);
@@ -58,7 +59,7 @@ flashlight.target.position.set(0, -0.12, -1);
 camera.add(flashlight, flashlight.target);
 let flashOn = true;
 
-const POOL = 8;
+const POOL = IS_TOUCH ? 6 : 8;
 const pool = [];
 for (let i = 0; i < POOL; i++) {
   const l = new THREE.PointLight(0xffa050, 0, 6, 2);
@@ -135,19 +136,52 @@ let pitch = 0;
 const overlay = document.getElementById('overlay');
 const startBtn = document.getElementById('start');
 let locked = false;
+function setLocked(v) {
+  locked = v;
+  overlay.classList.toggle('hidden', v);
+  touch?.show(v);
+  startBtn.textContent = 'つづける';
+}
 startBtn.addEventListener('click', () => {
   audio.resume();
-  renderer.domElement.requestPointerLock();
+  if (IS_TOUCH) {
+    // スマホ：全画面・横向きにして始める
+    document.documentElement.requestFullscreen?.().catch(() => {});
+    screen.orientation?.lock?.('landscape').catch(() => {});
+    setLocked(true);
+  } else renderer.domElement.requestPointerLock();
   if (!gameStarted) {
     gameStarted = true;
     seeker.start(20);
   }
 });
-document.addEventListener('pointerlockchange', () => {
-  locked = document.pointerLockElement === renderer.domElement;
-  overlay.classList.toggle('hidden', locked);
-  startBtn.textContent = 'つづける';
-});
+document.addEventListener('pointerlockchange', () => setLocked(document.pointerLockElement === renderer.domElement));
+
+// スマホの操作
+const toggleFlash = () => {
+  flashOn = !flashOn;
+  flashlight.visible = flashOn;
+};
+const touch = IS_TOUCH
+  ? setupTouch({
+      onLook: (dx, dy) => {
+        if (!locked) return;
+        const k = 0.0045 * settings.sensitivity;
+        yaw -= dx * k;
+        pitch -= dy * k * (settings.invertY ? -1 : 1);
+        pitch = Math.max(-1.45, Math.min(1.45, pitch));
+      },
+      onAction: () => locked && interact(),
+      onFlash: toggleFlash,
+      onMap: () => minimap.classList.toggle('hidden'),
+      onPause: () => setLocked(false),
+    })
+  : null;
+if (IS_TOUCH) {
+  document.body.classList.add('touch');
+  document.querySelector('label[for=s-sens]').textContent = '視点の感度';
+  document.querySelector('#overlay .keys').innerHTML = '左手でスティックを動かして移動 ／ 右手で画面をなでて見回す<br>右下のボタンで、戸を開ける・閉める・隠れる ／ 「走る」で走る';
+}
 document.addEventListener('mousemove', (e) => {
   if (!locked) return;
   const k = 0.0022 * settings.sensitivity;
@@ -190,10 +224,7 @@ addEventListener('keydown', (e) => {
   keys.add(e.code);
   if (!locked) return;
   if (e.code === 'KeyE') interact();
-  if (e.code === 'KeyF') {
-    flashOn = !flashOn;
-    flashlight.visible = flashOn;
-  }
+  if (e.code === 'KeyF') toggleFlash();
   if (e.code === 'KeyM') minimap.classList.toggle('hidden');
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
@@ -240,6 +271,7 @@ function updateTarget() {
   else if (hideTarget) prompt.textContent = `E　${HIDE_NAME[hideTarget.type]}`;
   else prompt.textContent = '';
   if (hiding || dead) prompt.textContent = '';
+  if (touch) touch.setAction(hiding ? '出る' : dead ? '' : prompt.textContent.replace('E　', ''));
 }
 
 // ---------- 隠れる ----------
@@ -419,9 +451,15 @@ function update(dt) {
   if (locked && !hiding && !dead) {
     fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw));
     right.set(Math.cos(yaw), 0, -Math.sin(yaw));
-    const run = keys.has('ShiftLeft') || keys.has('ShiftRight');
-    const speed = run ? 3.3 : 1.7;
+    const ts = touch?.state;
+    const tMag = ts ? Math.hypot(ts.x, ts.y) : 0;
+    const run = keys.has('ShiftLeft') || keys.has('ShiftRight') || (ts?.run && tMag > 0.2);
+    const speed = (run ? 3.3 : 1.7) * (tMag > 0 && !run ? Math.min(1, tMag * 1.3) : 1);
     let mx = 0, mz = 0;
+    if (tMag > 0.12) {
+      mx += fwd.x * -ts.y + right.x * ts.x;
+      mz += fwd.z * -ts.y + right.z * ts.x;
+    }
     if (keys.has('KeyW') || keys.has('ArrowUp')) { mx += fwd.x; mz += fwd.z; }
     if (keys.has('KeyS') || keys.has('ArrowDown')) { mx -= fwd.x; mz -= fwd.z; }
     if (keys.has('KeyD') || keys.has('ArrowRight')) { mx += right.x; mz += right.z; }
