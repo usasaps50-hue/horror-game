@@ -13,12 +13,24 @@ import { U, FH } from './plan.js';
 const ROAM_SPEED = 2.7;
 const CHASE_SPEED = 3.05;
 const CATCH_DIST = 0.85;
+export const SEEKER_SCALE = 1.4; // 子どもより少し大きく（身長 約 1.55m）
 
 export class Seeker {
-  constructor({ world, nav, scene, model, audio, R, onCatch, onSay }) {
+  constructor({ world, nav, scene, model, clips = {}, audio, R, onCatch, onSay }) {
     Object.assign(this, { world, nav, audio, R, onCatch, onSay });
     this.obj = new THREE.Group();
+    model.scale.setScalar(SEEKER_SCALE);
     this.obj.add(model);
+    // アニメーション（走る・ふらふら歩く・叫ぶ）
+    this.mixer = new THREE.AnimationMixer(model);
+    this.actions = {};
+    for (const [k, clip] of Object.entries(clips)) if (clip) this.actions[k] = this.mixer.clipAction(clip);
+    if (this.actions.scream) {
+      this.actions.scream.setLoop(THREE.LoopOnce);
+      this.actions.scream.clampWhenFinished = true;
+    }
+    this.anim = null;
+    this.moved = false;
     this.obj.visible = false;
     scene.add(this.obj);
     this.pos = new THREE.Vector3();
@@ -61,6 +73,26 @@ export class Seeker {
     return true;
   }
 
+  play(name, timeScale = 1) {
+    const a = this.actions[name];
+    if (!a) return;
+    a.timeScale = timeScale;
+    if (this.anim === name) return;
+    const prev = this.actions[this.anim];
+    a.reset().play();
+    if (prev) a.crossFadeFrom(prev, name === 'scream' ? 0.05 : 0.25, false);
+    this.anim = name;
+  }
+
+  animate(dt) {
+    if (this.state === 'caught') this.play('scream', 0.35); // 叫びはじめ（立ったまま）だけ使う
+    else if (!this.moved) this.play('walk', 0.15);
+    else if (this.state === 'search') this.play('walk', 1);
+    else this.play('run', this.state === 'chase' ? 1.15 : 1);
+    this.mixer.update(dt);
+    this.moved = false;
+  }
+
   followPath(dt, speed) {
     if (!this.path || this.pi >= this.path.length) return true;
     if (this.pause > 0) {
@@ -84,6 +116,7 @@ export class Seeker {
     const d = new THREE.Vector3(target.x - this.pos.x, 0, target.z - this.pos.z);
     const dist = d.length();
     const step = speed * dt;
+    this.moved = true;
     if (dist <= step) {
       this.pos.x = target.x;
       this.pos.z = target.z;
@@ -140,7 +173,9 @@ export class Seeker {
 
   // ---------- 毎フレーム ----------
   update(dt, player) {
-    this.obj.position.set(this.pos.x, this.pos.y + Math.abs(Math.sin(this.bob)) * 0.05, this.pos.z);
+    if (this.state !== 'caught') this.obj.position.set(this.pos.x, this.pos.y, this.pos.z);
+    if (this.obj.visible) this.animate(dt);
+    if (this.state === 'caught') return;
     this.audio.setSource(new THREE.Vector3(this.pos.x, this.pos.y + 1, this.pos.z), player.floor === this.floor);
 
     switch (this.state) {
@@ -270,6 +305,7 @@ export class Seeker {
         if (d.length() > 0.01) {
           this.obj.rotation.y = Math.atan2(d.x, d.z);
           this.pos.addScaledVector(d.normalize(), Math.min(d.length(), CHASE_SPEED * dt));
+          this.moved = true;
         }
       }
     }

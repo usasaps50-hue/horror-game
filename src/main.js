@@ -88,16 +88,21 @@ setLoad(0);
 await initTextures();
 setLoad(0.1);
 await loadModels((p) => setLoad(0.1 + p * 0.5, '（家具）'));
-const gltf = await new GLTFLoader().loadAsync('assets/models/zashiki_warashi.glb', (ev) => {
-  if (ev.total) setLoad(0.6 + (ev.loaded / ev.total) * 0.3, '（座敷童子）');
+// 座敷童子：体（ふらふら歩くアニメつき）と、走る・叫ぶアニメ
+const gl = new GLTFLoader();
+const gltf = await gl.loadAsync('assets/models/zashiki/body.glb', (ev) => {
+  if (ev.total) setLoad(0.6 + (ev.loaded / ev.total) * 0.28, '（座敷童子）');
 });
+const [runG, screamG] = await Promise.all([gl.loadAsync('assets/models/zashiki/run.glb'), gl.loadAsync('assets/models/zashiki/scream.glb')]);
+const clips = { walk: gltf.animations[0], run: runG.animations[0], scream: screamG.animations[0] };
 setLoad(0.92, '（旅館を組み立て中）');
 await new Promise((r) => setTimeout(r, 50));
 const world = buildRyokan(R);
 scene.add(world.root);
 
 if (world.spawns.zashiki) {
-  const m = gltf.scene;
+  const m = SkeletonUtils.clone(gltf.scene);
+  m.scale.setScalar(1.4);
   m.traverse((o) => {
     if (o.isMesh) {
       o.castShadow = true;
@@ -108,18 +113,29 @@ if (world.spawns.zashiki) {
   m.quaternion.copy(world.spawns.zashiki.quat);
   scene.add(m);
 }
-const mixer = new THREE.AnimationMixer(gltf.scene);
+const okuModel = scene.children[scene.children.length - 1];
+const mixer = new THREE.AnimationMixer(okuModel);
 const audio = new GameAudio();
 const seekerModel = SkeletonUtils.clone(gltf.scene);
 seekerModel.position.set(0, 0, 0);
 seekerModel.quaternion.identity();
 const seeker = new Seeker({
-  world, nav: new Nav(world), scene, model: seekerModel, audio, R,
+  world, nav: new Nav(world), scene, model: seekerModel, clips, audio, R,
   onCatch: () => die(),
   onSay: (t) => subtitle(t),
 });
 let gameStarted = false;
-if (gltf.animations[0]) mixer.clipAction(gltf.animations[0]).play();
+let seekerHead = seekerModel;
+seekerModel.traverse((o) => {
+  if (o.name === 'Head') seekerHead = o;
+  if (o.isMesh) o.frustumCulled = false; // 目の前まで来ても消えないように
+});
+// 奥の間の座敷童子は、歩きかけの姿で止まっている
+if (clips.walk && world.spawns.zashiki) {
+  const a = mixer.clipAction(clips.walk);
+  a.play();
+  a.paused = true;
+}
 document.getElementById('loading').remove();
 document.getElementById('seed').textContent = `seed ${seed}`;
 
@@ -351,20 +367,56 @@ function subtitle(text) {
 }
 
 let dead = false;
+let scare = null; // 見つかったときの演出の進み具合
 const deathEl = document.getElementById('death');
 function die() {
   dead = true;
   if (hiding) exitHide();
-  // 目の前に座敷童子
+  scare = { t: -0.3 }; // まず一瞬、真っ暗になる
+  const f0 = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+  seeker.obj.position.set(camera.position.x + f0.x * 1.8, groundY, camera.position.z + f0.z * 1.8);
+  deathEl.className = 'cut';
+  seeker.obj.visible = true;
+}
+
+// 首の向きを変える（体の左右の軸まわりに回す。マイナスで顔が上がる）
+const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _q3 = new THREE.Quaternion();
+function liftHead(ang) {
+  seeker.obj.updateMatrixWorld(true);
+  seekerHead.getWorldQuaternion(_q1);
+  const right = new THREE.Vector3(1, 0, 0).applyQuaternion(seeker.obj.quaternion);
+  _q2.setFromAxisAngle(right, ang).multiply(_q1);
+  seekerHead.parent.getWorldQuaternion(_q3).invert();
+  seekerHead.quaternion.copy(_q3.multiply(_q2));
+}
+
+// 目の前に「バァー」と飛び出してくる
+function updateScare(dt) {
+  scare.t += dt;
+  const t = scare.t;
+  if (t < 0) return;
+  seeker.animate(dt);
+  liftHead(-0.75); // 首をぐっと上げて、こちらの顔をのぞき込む
+  if (deathEl.className === 'cut') deathEl.className = 'flash';
+  const k = Math.min(1, t / 0.2);
+  const ease = 1 + 2.7 * Math.pow(k - 1, 3) + 1.7 * Math.pow(k - 1, 2); // 少し行きすぎて戻る
+  const dist = 1.8 - (1.8 - 0.62) * ease;
   const f = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
-  seeker.pos.set(camera.position.x + f.x * 0.55, groundY, camera.position.z + f.z * 0.55);
-  seeker.obj.position.copy(seeker.pos);
   seeker.obj.rotation.y = yaw;
-  pitch = -0.32; // 小さな子の顔を見下ろす
-  deathEl.className = 'flash';
-  setTimeout(() => (deathEl.className = 'black'), 1100);
-  setTimeout(() => {
+  // 頭（顔）がちょうど目の前に来るように、体ごと位置を合わせる
+  const want = new THREE.Vector3(camera.position.x + f.x * dist, camera.position.y + 0.06, camera.position.z + f.z * dist);
+  seeker.obj.updateMatrixWorld(true);
+  const head = seekerHead.getWorldPosition(new THREE.Vector3());
+  seeker.obj.position.add(want.sub(head));
+  pitch = 0.1;
+  // 画面をゆらす
+  const shake = Math.max(0, 1 - t / 1.4) * 0.045;
+  camera.rotation.x += (Math.random() - 0.5) * shake;
+  camera.rotation.y += (Math.random() - 0.5) * shake;
+  if (t > 1.4 && deathEl.className !== 'black') deathEl.className = 'black';
+  if (t > 3.4) {
     // 六年二組の部屋で目をさます
+    scare = null;
     floor = world.start.floor;
     groundY = floor * FH;
     camera.position.copy(world.start.pos).setY(groundY + EYE);
@@ -374,7 +426,7 @@ function die() {
     deathEl.className = '';
     dead = false;
     toast('……ゆめ？', 2000);
-  }, 3600);
+  }
 }
 
 const inRect = (r, x, z) => x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1;
@@ -448,6 +500,7 @@ let heartTimer = 0;
 function update(dt) {
   elapsed += dt;
   camera.rotation.set(pitch, yaw, 0);
+  if (scare) updateScare(dt);
   if (locked && !hiding && !dead) {
     fwd.set(-Math.sin(yaw), 0, -Math.cos(yaw));
     right.set(Math.cos(yaw), 0, -Math.sin(yaw));

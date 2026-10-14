@@ -66,8 +66,9 @@
   #hide.chest { background: linear-gradient(to bottom, #050505 0 46%, rgba(0,0,0,0) 46% 52%, #050505 52% 100%); }
   #death { position: fixed; inset: 0; pointer-events: none; z-index: 8; display: flex; align-items: center; justify-content: center;
     font-size: 72px; letter-spacing: .4em; color: #c01010; opacity: 0; }
-  #death.flash { opacity: 1; background: radial-gradient(circle, rgba(120,0,0,0.15), rgba(60,0,0,0.75)); animation: shake .12s infinite; }
+  #death.flash { opacity: 1; background: radial-gradient(circle, rgba(120,0,0,0) 30%, rgba(90,0,0,0.85)); animation: shake .08s infinite; align-items: flex-end; padding-bottom: 8vh; }
   #death.flash::after { content: "みーつけた"; }
+  #death.cut { opacity: 1; background: #000; }
   #death.black { opacity: 1; background: #000; transition: background 1s; }
   @keyframes shake { 50% { transform: translate(4px, -3px); } }
   /* ---------- スマホ ---------- */

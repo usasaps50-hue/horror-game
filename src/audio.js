@@ -2,6 +2,9 @@
 // 座敷童子の音は、いる方向から聞こえる（PannerNode）。
 import * as THREE from 'three';
 
+// 音を鳴らすかどうか（いまは全部オフ。セリフは字幕だけ）
+export const SOUND_ON = false;
+
 // かごめかごめ（音名, 長さ[拍]）
 const N = { D4: 293.66, E4: 329.63, G4: 392.0, A4: 440.0, C5: 523.25, D5: 587.33 };
 const KAGOME = [
@@ -62,6 +65,7 @@ export class GameAudio {
   }
 
   updateListener(camera) {
+    if (!SOUND_ON) return;
     const l = this.ctx.listener;
     const p = camera.getWorldPosition(new THREE.Vector3());
     const f = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
@@ -85,6 +89,7 @@ export class GameAudio {
 
   // 座敷童子の位置（ちがう階にいると、こもった小さな音になる）
   setSource(v, sameFloor) {
+    if (!SOUND_ON) return;
     this.source.copy(v);
     this.setPos(this.panner, v);
     this.sourceFloorFactor = sameFloor ? 1 : 0.35;
@@ -114,6 +119,7 @@ export class GameAudio {
   }
 
   startSong() {
+    if (!SOUND_ON) return;
     if (this.songOn) return;
     this.songOn = true;
     this.songStep = 0;
@@ -156,11 +162,13 @@ export class GameAudio {
 
   // ぺたぺた（裸足の足音）
   footstep() {
+    if (!SOUND_ON) return;
     this.noiseBurst(this.panner, this.ctx.currentTime, 0.07, 900, 0.5 * this.sourceFloorFactor);
   }
 
   // どん、どん、どん
   knock(pos) {
+    if (!SOUND_ON) return;
     const p = this.makePanner();
     p.refDistance = 3;
     p.connect(this.master);
@@ -182,6 +190,7 @@ export class GameAudio {
 
   // 戸を開ける音
   slide(pos) {
+    if (!SOUND_ON) return;
     const p = this.makePanner();
     p.connect(this.master);
     this.setPos(p, pos);
@@ -189,6 +198,7 @@ export class GameAudio {
   }
 
   heartbeat(rate) {
+    if (!SOUND_ON) return;
     const t = this.ctx.currentTime;
     for (const dt of [0, 0.18]) {
       const o = this.ctx.createOscillator();
@@ -205,6 +215,7 @@ export class GameAudio {
 
   // 子どもの声（読み上げを高い声にする）
   say(text) {
+    if (!SOUND_ON) return;
     if (!('speechSynthesis' in window)) return;
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
