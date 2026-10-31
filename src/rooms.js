@@ -5,6 +5,31 @@ import * as P from './props.js';
 import * as Q from './props2.js';
 import { buildBath } from './bath.js';
 import { M } from './textures.js';
+import { mbox } from './geo.js';
+
+// 客室の基本（入口・広縁・押入れ・床の間・座卓・テレビ・浴衣など）
+function guestBasics(c, { toko = 'w', table = true, chairs = 4 } = {}) {
+  c.guestEntry();
+  c.hiroen();
+  const other = toko === 'w' ? 'e' : 'w';
+  const zc = (c.zFront + c.hd2) / 2;
+  // 床の間と床脇
+  c.wall(P.tokonoma(), toko, 0.35, 0.4, true);
+  c.wall(Q.tokowaki(1.1), toko, -0.45, 0.32, true);
+  // 押入れ（隠れられる）
+  c.oshiire(other, 0.45);
+  // テレビ・冷蔵庫と金庫・衣桁の浴衣
+  c.wall(P.crtTv(), other, -0.45, 0.35, true);
+  c.wall(Q.miniFridge(), 'n', c.doorX > 0 ? -0.75 : 0.75, 0.3, true);
+  if (table) {
+    c.put(P.lowTable(1.4, 0.9), 0, zc, 0, true);
+    c.put(P.teaSet(), 0.2, zc + 0.1, 0.3).position.y = 0.45;
+    const seats = [[0, -0.85, 0], [0, 0.85, Math.PI], [-1.05, 0, Math.PI / 2], [1.05, 0, -Math.PI / 2]].slice(0, chairs);
+    for (const [x, z, r] of seats) c.put(Q.zaisu(), x, zc + z, r);
+  }
+  c.put(Q.midarebako(), c.hw * 0.45 * (toko === 'w' ? 1 : -1), c.hd2 - 0.5, 0.2);
+  return zc;
+}
 
 const STUDENT = [0x2a3a6a, 0x6a2a2a, 0x2a5a3a, 0x3a3a3a, 0xc8a83a, 0x5a3a6a, 0x8a8a8a];
 
@@ -13,45 +38,32 @@ const S = {
   kyakushitsu: {
     name: '客室「桔梗の間」', plate: '桔梗の間', floor: 'tatami', door: 'koshi', windows: true,
     build(c) {
-      c.hiroen();
-      const zc = (c.hd2 - c.hd) / 2;
-      c.put(P.lowTable(), 0, zc, 0, true);
-      for (const [x, z, r] of [[0, -0.75, 0], [0, 0.75, Math.PI], [-1.0, 0, Math.PI / 2], [1.0, 0, -Math.PI / 2]]) c.put(P.zabuton(), x, zc + z, r);
-      c.wall(P.tokonoma(), 'w', 0.2, 0.4, true);
-      c.wall(P.crtTv(), 'e', 0.3, 0.35, true);
-      c.wall(P.andon(), 'e', -0.5, 0.35);
+      const zc = guestBasics(c, { toko: 'w' });
+      c.wall(Q.ikou(), 'e', 0.0, 0.3);
       c.lamp(0, zc);
     },
   },
   sensei: {
     name: '先生の部屋', plate: '引率教員', floor: 'tatami', door: 'koshi', windows: true,
     build(c) {
-      c.hiroen();
-      const zc = (c.hd2 - c.hd) / 2;
-      c.put(P.lowTable(1.2, 0.6), 0, zc - 0.3, 0, true);
-      c.put(Q.papers(c.R, 6, 0.3), 0, zc - 0.3).position.y = 0.45;
-      c.put(P.bookLedger(), 0.3, zc - 0.3).position.y = 0.45;
-      c.put(P.zabuton(), 0, zc + 0.4, Math.PI);
-      c.put(Q.beerCans(c.R, 6), 0.6, zc + 0.6);
-      c.put(Q.ashtray(), -0.5, zc + 0.3);
-      c.wall(P.futon(), 'w', 0.1, 0.55);
-      c.wall(P.crtTv(), 'e', 0.4, 0.35, true);
-      for (let i = 0; i < 2; i++) c.wall(P.bag(0x1a1a1a), 'e', -0.4 - i * 0.2, 0.2);
+      const zc = guestBasics(c, { toko: 'e', chairs: 2 });
+      c.put(Q.papers(c.R, 6, 0.3), 0, zc).position.y = 0.45;
+      c.put(P.bookLedger(), 0.3, zc - 0.2).position.y = 0.45;
+      c.put(Q.beerCans(c.R, 6), 0.5, zc + 0.9);
+      c.put(Q.ashtray(), -0.4, zc - 0.3).position.y = 0.45;
+      for (let i = 0; i < 2; i++) c.wall(P.bag(0x1a1a1a), 'w', 0.6 + i * 0.15, 0.2);
       const roll = Q.textPlane(['しおり　三日目', '', '6:30 起床', '7:00 朝食', '8:00 出発', '', '※夜間の外出禁止'], 0.6, 0.8, { size: 24 });
-      c.wall(roll, 'e', 0.0, 0.04).position.y = 1.4;
+      c.wall(roll, 'w', -0.2, 0.04).position.y = 1.4;
       c.bulb(0, zc, true);
     },
   },
   zashiki: {
     name: '座敷「鶴の間」', plate: '鶴の間', floor: 'tatami', door: 'fusuma', windows: true,
     build(c) {
-      c.hiroen();
-      const zc = (c.hd2 - c.hd) / 2;
-      c.wall(P.tokonoma(), 'e', 0, 0.4, true);
-      c.wall(P.byobu(2.2, 1.4), 'w', 0, 0.3);
-      c.put(P.lowTable(1.8, 0.9), 0, zc, 0, true);
-      for (const x of [-0.45, 0.45]) for (const z of [-0.75, 0.75]) c.put(P.zabuton(), x, zc + z, z < 0 ? 0 : Math.PI);
+      const zc = guestBasics(c, { toko: 'e' });
+      c.wall(P.byobu(2.0, 1.4), 'w', -0.1, 0.3);
       c.put(P.andon(), c.corners[0][0], c.corners[0][1]);
+      c.lamp(0, zc);
     },
   },
   chashitsu: {
@@ -98,6 +110,13 @@ const S = {
   futonbeya: {
     name: '布団部屋', plate: '布団部屋', floor: 'tatami', door: 'wood',
     build(c) {
+      if (c.hw < 1.6) {
+        // 押入れくらいの小部屋：奥に布団の山、手前は通れる
+        c.wall(P.futonPile(c.R, 9), 's', 0, 0.5, true);
+        c.wall(P.futonPile(c.R, 6), 'w', 0.6, 0.5, true);
+        c.bulb(0, 0, false);
+        return;
+      }
       for (const side of ['w', 'e', 's']) for (const t of [-0.5, 0.5]) c.wall(P.futonPile(c.R, c.R.int(4, 9)), side, t, 0.5, true);
       const f = P.futon(0x8a8a8a, 0.6);
       c.put(f, 0.3, 0.2, c.R.range(0, 6));
@@ -239,23 +258,23 @@ const Mrooms = {
   oobeya: {
     name: '大部屋（六年二組）', plate: '六年二組', floor: 'tatami', door: 'koshi', windows: true,
     build(c) {
-      // 長い方向に布団を 2 列
-      const alongX = c.hw >= c.hd;
-      const long = alongX ? c.hw : c.hd;
-      const short = alongX ? c.hd : c.hw;
-      const n = Math.floor((long * 2 - 0.6) / 1.15);
-      for (const s of [-1, 1])
-        for (let i = 0; i < n; i++) {
-          const a = -long + 0.9 + i * 1.15;
-          const b = s * (short - 1.15);
-          const f = P.futon(c.R.pick([0x4a6a8a, 0x6a4a6a, 0x4a6a5a]), c.R.range(-1, 1));
-          if (alongX) c.put(f, a, b, s < 0 ? 0 : Math.PI);
-          else c.put(f, b, a, s < 0 ? Math.PI / 2 : -Math.PI / 2);
-          if (c.R.chance(0.3)) c.put(P.bag(c.R.pick(STUDENT)), alongX ? a : b + 0.4, alongX ? b + 0.4 * s : a, c.R.range(0, 6));
+      c.guestEntry();
+      c.hiroen();
+      c.oshiire('w', 0.6);
+      c.oshiire('e', 0.6);
+      // 修学旅行らしく、布団が 2 列にずらりと敷いてある（頭を壁側に）
+      const z0 = c.zFront + 1.2, z1 = c.hd2 - 1.2;
+      const n = Math.max(2, Math.floor((c.hw * 2 - 2.2) / 1.1));
+      for (const [z, r] of [[z0, 0], [z1, Math.PI]]) {
+        for (let k = 0; k < n; k++) {
+          const x = -((n - 1) * 1.1) / 2 + k * 1.1;
+          c.put(P.futon(), x + c.R.range(-0.05, 0.05), z, r + c.R.range(-0.08, 0.08));
+          if (c.R.chance(0.4)) c.put(P.bag(c.R.pick(STUDENT)), x + 0.3, z + (r ? -1.2 : 1.2), c.R.range(0, 6));
         }
-      for (let i = 0; i < 6; i++) c.put(P.zabuton(0xf2efe6), c.R.range(-c.hw + 1, c.hw - 1), c.R.range(-0.3, 0.3), c.R.range(0, 6)).scale.set(0.8, 1.4, 0.6);
-      c.lamp(alongX ? -c.hw / 2 : 0, alongX ? 0 : -c.hd / 2, false);
-      c.lamp(alongX ? c.hw / 2 : 0, alongX ? 0 : c.hd / 2, true);
+      }
+      for (let i = 0; i < 4; i++) c.put(Q.midarebako(), c.R.range(-c.hw + 1.2, c.hw - 1.2), (z0 + z1) / 2 + c.R.range(-0.3, 0.3), c.R.range(0, 6));
+      c.lamp(-c.hw / 2, (z0 + z1) / 2, false);
+      c.lamp(c.hw / 2, (z0 + z1) / 2, true);
     },
   },
   genkan: {
@@ -424,6 +443,24 @@ const Mrooms = {
   },
 };
 
+const Extra = {
+  yuagari: {
+    name: '湯上り処', plate: '湯上り処', floor: 'tatami', door: 'noren2',
+    build(c) {
+      c.wall(P.massageChair(), 's', -0.4, 0.55, true);
+      c.wall(P.massageChair(), 's', 0.4, 0.55, true);
+      c.wall(Q.waterCooler(), 'e', -0.6, 0.25, true);
+      c.wall(P.vendingMachine(), 'e', 0.3, 0.4, true);
+      for (const t of [-0.6, 0.2]) c.wall(Q.rattanChair(), 'w', t, 0.45, true);
+      c.wall(Q.bench(1.4), 'w', 0.75, 0.3, true);
+      c.put(P.fan(), c.corners[0][0], c.corners[0][1], 0.5);
+      const poster = Q.textPlane(['湯上がりに', '冷たい牛乳を', 'どうぞ'], 0.45, 0.6, { size: 34, border: '#2a4a8a' });
+      c.wall(poster, 'w', -0.2, 0.04).position.y = 1.5;
+      c.lamp(0, 0);
+    },
+  },
+};
+
 // ---------- 大部屋（12m 四方） ----------
 const Lrooms = {
   enkaijo: {
@@ -485,44 +522,42 @@ const Lrooms = {
   tokubetsu: {
     name: '特別室「松の間」', plate: '松の間', floor: 'tatami', door: 'koshi', windows: true,
     build(c) {
-      c.hiroen(1.6);
-      const zc = (c.hd2 - c.hd) / 2;
-      c.wall(P.tokonoma(), 'w', 0.3, 0.4, true);
-      c.wall(P.byobu(2.6, 1.5), 'w', -0.5, 0.3);
-      c.put(P.lowTable(2.0, 1.0), -1.0, zc, 0, true);
-      for (const x of [-1.5, -0.5]) for (const z of [-0.75, 0.75]) c.put(P.zabuton(), x, zc + z, z < 0 ? 0 : Math.PI);
-      c.put(Q.kotatsu(), 2.6, zc - 0.8, 0, true);
+      const zc = guestBasics(c, { toko: 'w' });
+      c.wall(P.byobu(2.6, 1.5), 'w', -0.15, 0.3);
+      c.put(Q.kotatsu(), c.hw - 1.4, zc - 1.3, 0, true);
       // 部屋付きのひのき風呂
       const tub = new THREE.Group();
       P.box(1.7, 0.55, 1.3, P.mat(0xc8a878, { roughness: 0.5 }), 0, 0, 0, tub);
       P.box(1.5, 0.02, 1.1, P.mat(0x5e8e92, { transparent: true, opacity: 0.85, roughness: 0.05 }), 0, 0.5, 0, tub);
-      c.put(tub, c.hw - 1.1, -c.hd + 1.0, 0, true);
-      for (let i = 0; i < 2; i++) c.put(P.futon(), 1.2 + i * 1.15, zc + 1.0, 0);
-      c.wall(P.andon(), 'e', 0.6, 0.35);
-      c.lamp(-1.0, zc);
+      c.put(tub, c.hw - 1.1, c.hd2 - 1.0, 0, true);
+      for (let i = 0; i < 2; i++) c.put(P.futon(), -c.hw + 1.0 + i * 1.15, c.hd2 - 1.3, 0);
+      c.wall(Q.ikou(), 'e', 0.6, 0.3);
+      c.lamp(0, zc);
     },
   },
   hagi: {
     name: '和洋室「萩の間」', plate: '萩の間', floor: 'tatami', door: 'koshi', windows: true,
     build(c) {
+      c.guestEntry();
       c.hiroen();
-      // ベッドが 2 台（洋室部分は板の間）
-      P.box(c.hw * 2, 0.013, 2.6, M.woodFloor, -0, 0, -c.hd + 1.5, c.g);
-      for (const x of [-0.75, 0.75]) {
+      const zc = (c.zFront + c.hd2) / 2;
+      // 手前半分が洋室（板の間にベッド 2 台）、奥が畳
+      mbox(c.hw * 2, 0.013, (c.hd2 - c.zFront) / 2, M.woodFloor, 0, 0, c.zFront + (c.hd2 - c.zFront) / 4, c.g);
+      // ベッドは左右の壁ぎわ（まんなかを通れるように）
+      for (const x of [-(c.hw - 0.6), c.hw - 0.6]) {
         const bed = new THREE.Group();
         P.box(1.0, 0.35, 2.0, P.mat(0x4a3020, { roughness: 0.5 }), 0, 0, 0, bed);
         P.box(0.96, 0.15, 1.95, P.mat(0xece6d8), 0, 0.35, 0, bed);
         P.box(0.98, 0.06, 1.3, P.mat(0x8a6a5a), 0, 0.5, 0.3, bed);
         P.box(0.6, 0.1, 0.35, P.mat(0xf4f2ec), 0, 0.5, -0.75, bed);
-        P.box(1.0, 0.7, 0.06, P.mat(0x4a3020, { roughness: 0.5 }), 0, 0.2, -1.0, bed);
-        c.put(bed, x, -c.hd + 2.2, Math.PI, true);
+        c.put(bed, x, c.zFront + 1.15, 0, true);
       }
-      const zc = (c.hd2 - c.hd) / 2 + 0.9;
-      c.put(P.lowTable(1.2, 0.7), 0, zc, 0, true);
-      for (const z of [-0.6, 0.6]) c.put(P.zabuton(), 0, zc + z, z < 0 ? 0 : Math.PI);
-      c.wall(P.crtTv(), 'e', 0.6, 0.35, true);
-      c.wall(P.andon(), 'w', 0.6, 0.35);
-      c.lamp(0, -0.5);
+      c.put(P.lowTable(1.2, 0.7), 0, c.hd2 - 1.1, 0, true);
+      for (const x of [-0.75, 0.75]) c.put(Q.zaisu(), x, c.hd2 - 1.1, x < 0 ? Math.PI / 2 : -Math.PI / 2);
+      c.wall(P.crtTv(), 'e', 0.5, 0.35, true);
+      c.oshiire('w', -0.6);
+      c.put(Q.midarebako(), 0.9, c.hd2 - 0.4, 0.3);
+      c.lamp(0, zc);
     },
   },
   kazokuburo: {
@@ -704,6 +739,7 @@ for (const [k, v] of Object.entries(S)) ROOM_TYPES[k] = { ...v, size: 'S' };
 for (const [k, v] of Object.entries(Mrooms)) ROOM_TYPES[k] = { ...v, size: 'M' };
 for (const [k, v] of Object.entries(Lrooms)) ROOM_TYPES[k] = { ...v, size: 'L' };
 for (const [k, v] of Object.entries(Gardens)) ROOM_TYPES[k] = { ...v, size: 'L' };
+for (const [k, v] of Object.entries(Extra)) ROOM_TYPES[k] = { ...v, size: 'M' };
 
 export const NEED = { L: 0, M: 0, S: 0 };
 for (const v of Object.values(ROOM_TYPES)) NEED[v.size]++;

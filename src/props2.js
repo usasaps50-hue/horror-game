@@ -824,3 +824,81 @@ export function kotatsu() {
   sphere(0.06, mat(0xe08a20), -0.05, 0.48, 0.15, g);
   return g;
 }
+
+// ---------- 客室の小物 ----------
+// 座椅子（脚のないいす）
+export function zaisu(color = 0x5a2a1a) {
+  const g = group();
+  const m = mat(0x2a1a0e, { roughness: 0.35 });
+  box(0.48, 0.06, 0.5, m, 0, 0, 0, g);
+  const back = box(0.48, 0.55, 0.05, m, 0, 0.05, -0.22, g);
+  back.rotation.x = -0.25;
+  box(0.44, 0.06, 0.44, mat(color, { roughness: 0.9 }), 0, 0.06, 0.02, g);
+  box(0.42, 0.42, 0.05, mat(color, { roughness: 0.9 }), 0, 0.12, -0.18, g).rotation.x = -0.25;
+  return g;
+}
+
+// 床脇の違い棚（段違いの棚と小さな戸棚）
+export function tokowaki(w = 1.2) {
+  const g = group();
+  const m = mat(0x3a2412, { roughness: 0.35 });
+  box(w, 0.14, 0.6, mat(0x1c120a, { roughness: 0.3 }), 0, 0, 0, g);
+  box(w, 0.4, 0.55, m, 0, 1.6, -0.02, g); // 天袋
+  box(w / 2, 0.03, 0.4, m, -w / 4, 0.95, -0.08, g);
+  box(w / 2, 0.03, 0.4, m, w / 4, 1.1, -0.08, g);
+  box(0.03, 0.15, 0.4, m, 0, 0.95, -0.08, g);
+  cyl(0.05, 0.07, 0.2, mat(0x5a3a2a, { roughness: 0.3 }), -w / 4, 0.98, -0.05, g, 12);
+  return g;
+}
+
+// 衣桁（いこう）に掛けた浴衣
+export function ikou() {
+  const g = group();
+  const m = mat(0x3a1a0a, { roughness: 0.35 });
+  for (const x of [-0.6, 0.6]) {
+    box(0.05, 1.5, 0.05, m, x, 0, 0, g);
+    box(0.06, 0.04, 0.4, m, x, 0, 0, g);
+  }
+  box(1.4, 0.05, 0.05, m, 0, 1.45, 0, g);
+  box(1.3, 0.04, 0.04, m, 0, 0.9, 0, g);
+  const yk = new THREE.Mesh(new THREE.BoxGeometry(1.25, 1.1, 0.02), new THREE.MeshStandardMaterial({ map: T.kimono, color: 0x7a90c8, roughness: 0.9 }));
+  yk.position.set(0, 0.9, 0.03);
+  g.add(yk);
+  box(0.25, 0.25, 0.03, mat(0x2a3a6a), 0, 0.55, 0.04, g); // 帯
+  return g;
+}
+
+// 乱れ箱（浴衣とタオルを入れた浅い箱）
+export function midarebako() {
+  const g = group();
+  box(0.5, 0.08, 0.38, mat(0x1a0a06, { roughness: 0.3 }), 0, 0, 0, g);
+  box(0.4, 0.06, 0.28, new THREE.MeshStandardMaterial({ map: T.kimono, color: 0x7a90c8, roughness: 0.9 }), -0.02, 0.06, 0, g);
+  box(0.3, 0.04, 0.2, mat(0xf2f0e8), 0.04, 0.12, 0.02, g);
+  return g;
+}
+
+export function miniFridge() {
+  const g = group();
+  box(0.45, 0.55, 0.45, mat(0x8a7a6a, { roughness: 0.4 }), 0, 0, 0, g);
+  box(0.02, 0.2, 0.03, mat(0x333333), 0.18, 0.25, 0.23, g);
+  const s = box(0.4, 0.35, 0.4, mat(0x2a2a2a, { metalness: 0.5, roughness: 0.4 }), 0, 0.55, 0, g); // 金庫
+  return g;
+}
+
+// ---------- 湯上り処 ----------
+export function waterCooler() {
+  const g = group();
+  box(0.35, 1.0, 0.35, mat(0xd8d8d0), 0, 0, 0, g);
+  cyl(0.13, 0.13, 0.35, mat(0x9ac8e0, { transparent: true, opacity: 0.6, roughness: 0.05 }), 0, 1.0, 0, g);
+  return g;
+}
+
+export function rattanChair() {
+  const g = group();
+  const m = mat(0x9a7a4a, { roughness: 0.8 });
+  box(0.6, 0.08, 0.6, m, 0, 0.38, 0, g);
+  box(0.6, 0.55, 0.06, m, 0, 0.42, -0.28, g);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(0.04, 0.38, 0.04, m, sx * 0.26, 0, sz * 0.26, g);
+  box(0.5, 0.08, 0.5, mat(0xd8c8a8), 0, 0.46, 0.02, g);
+  return g;
+}

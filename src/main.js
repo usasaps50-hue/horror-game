@@ -292,7 +292,7 @@ function updateTarget() {
 
 // ---------- 隠れる ----------
 const hideEl = document.getElementById('hide');
-const HIDE_NAME = { futon: '布団に隠れる', locker: 'ロッカーに隠れる', chest: '長持に隠れる' };
+const HIDE_NAME = { futon: '布団に隠れる', locker: 'ロッカーに隠れる', chest: '長持に隠れる', oshiire: '押入れに隠れる' };
 let hideTarget = null;
 let hiding = null; // { spot, back: {x, z, yaw} }
 function findHideSpot() {
@@ -312,8 +312,10 @@ function findHideSpot() {
 }
 function enterHide(s) {
   hiding = { spot: s, back: { x: camera.position.x, z: camera.position.z, yaw } };
-  const y = { futon: 0.22, locker: 1.25, chest: 0.4 }[s.type];
-  camera.position.set(s.pos.x, s.floor * FH + y, s.pos.z);
+  const y = { futon: 0.22, locker: 1.25, chest: 0.4, oshiire: 1.15 }[s.type];
+  // 押入れは戸の内側（奥）に入る
+  const inset = s.type === 'oshiire' ? 0.45 : 0;
+  camera.position.set(s.pos.x - Math.sin(s.yaw) * inset, s.floor * FH + y, s.pos.z - Math.cos(s.yaw) * inset);
   yaw = s.yaw + Math.PI;
   pitch = s.type === 'futon' ? 0.05 : 0;
   hideEl.className = `show ${s.type}`;

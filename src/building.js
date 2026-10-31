@@ -83,7 +83,8 @@ export function buildRyokan(R) {
         if (!c || c.kind !== 'corr') continue;
         const cx = (x + 0.5) * U, cz = (y + 0.5) * U;
         const g = chunk(f, cx, cz);
-        if (!c.well) mbox(U + 0.002, 0.05, U + 0.002, M.woodFloor, cx, base - 0.05, cz, g);
+        // 1 階は板張り、客室の階（2・3 階）は赤いじゅうたん
+        if (!c.well) mbox(U + 0.002, 0.05, U + 0.002, f >= 1 && !stairCells.has(`${x},${y}`) ? M.carpet : M.woodFloor, cx, base - 0.05, cz, g);
         if (!stairCells.has(`${x},${y}`)) ceiling(U + 0.01, U + 0.01, cx, cz, g, base + H);
       }
     const lampAt = new Set();
@@ -126,7 +127,13 @@ export function buildRyokan(R) {
       const hd = (across ? d : w) / 2 - 0.06;
       const order = ['n', 'e', 's', 'w'];
       const extra = room.doors.slice(1).map((d) => order[(order.indexOf(d) - order.indexOf(room.door) + 4) % 4]);
-      def.build(makeCtx(inner, hw, hd, R, world, extra));
+      // 入口（戸）の位置：部屋の中心からの左右のずれ（ローカル x）
+      const { x: rx, y: ry, w: rw, h: rh } = room;
+      const dmx = (rx + Math.floor((rw - 1) / 2) + 0.5) * U, dmy = (ry + Math.floor((rh - 1) / 2) + 0.5) * U;
+      const doorX = { n: dmx - cx, s: cx - dmx, e: dmy - cz, w: cz - dmy }[room.door];
+      const ctx = makeCtx(inner, hw, hd, R, world, extra);
+      ctx.doorX = doorX;
+      def.build(ctx);
       inner.children.forEach((o) => (o.userData.room = room.type));
     }
 
@@ -407,18 +414,95 @@ function makeCtx(g, hw, hd, R, world, extraDoors = []) {
   const free = R.shuffle(['w', 'e', 's'].filter((x) => !extraDoors.includes(x)));
   const ci = 0.75;
   let back = 0; // 広縁のぶん、奥の壁を手前に見なす
+  let front = 0; // 入口（踏込・前室）のぶん、手前の壁を奥に見なす
   let corners = R.shuffle([[-hw + ci, hd - ci], [hw - ci, hd - ci], [-hw + ci, -hd + ci + 0.6], [hw - ci, -hd + ci + 0.6]]);
   const alongWall = (side, t, depth) => {
-    const hd2 = hd - back;
+    const z0 = -hd + front, z1 = hd - back;
+    const zc = (z0 + z1) / 2, half = (z1 - z0) / 2 - 0.3;
     switch (side) {
-      case 'n': return [t * (hw - 0.3), -hd + depth, 0];
-      case 's': return [-t * (hw - 0.3), hd2 - depth, Math.PI];
-      case 'w': return [-hw + depth, -t * (hd - 0.3) - back / 2, Math.PI / 2];
-      default: return [hw - depth, t * (hd - 0.3) - back / 2, -Math.PI / 2];
+      case 'n': return [t * (hw - 0.3), z0 + depth, 0];
+      case 's': return [-t * (hw - 0.3), z1 - depth, Math.PI];
+      case 'w': return [-hw + depth, zc - t * half, Math.PI / 2];
+      default: return [hw - depth, zc + t * half, -Math.PI / 2];
     }
+  };
+  const resetCorners = () => {
+    const ci2 = 0.75, z0 = -hd + front, z1 = hd - back;
+    corners = R.shuffle([[-hw + ci2, z1 - ci2], [hw - ci2, z1 - ci2], [-hw + ci2, z0 + ci2 + (front ? 0 : 0.6)], [hw - ci2, z0 + ci2 + (front ? 0 : 0.6)]]);
+    c.corners = corners;
   };
   const c = {
     g, R, hw, hd, free, corners, extraDoors,
+    // 客室の入口：踏込（土間）・上がり框・前室・トイレと洗面の小部屋・ふすまの仕切り
+    guestEntry(depth = 1.5) {
+      front = depth;
+      const z = -hd + depth;
+      // 前室の板の間
+      mbox(hw * 2, 0.014, depth, M.woodFloor, 0, 0, -hd + depth / 2, g);
+      // 踏込：石の土間と上がり框
+      const dx = c.doorX || 0;
+      mbox(1.1, 0.02, 0.8, M.stoneFloor, dx, 0.002, -hd + 0.4, g);
+      mbox(1.15, 0.05, 0.08, M.darkWood, dx, 0, -hd + 0.82, g);
+      for (const x of [dx - 0.18, dx + 0.18]) {
+        const sl = Pr.slippers(0x6a4a3a);
+        sl.position.set(x, 0.015, -hd + 1.05);
+        sl.rotation.y = Math.PI;
+        g.add(sl);
+      }
+      // トイレと洗面の小部屋（入口から遠い側の角）
+      const sideSign = dx > 0.1 ? -1 : dx < -0.1 ? 1 : -1;
+      const bw = Math.min(1.3, hw - Math.abs(dx) - 0.75);
+      const bx = sideSign < 0 ? -hw + bw : hw - bw;
+      const wall = (x0, x1, z0, z1) => {
+        const m = mbox(Math.max(0.06, x1 - x0), KAMOI, Math.max(0.06, z1 - z0), M.plaster, (x0 + x1) / 2, 0, (z0 + z1) / 2, g);
+        m.userData.solid = true;
+        mbox(Math.max(0.06, x1 - x0) + 0.01, H - KAMOI, Math.max(0.06, z1 - z0) + 0.01, M.plaster, (x0 + x1) / 2, KAMOI, (z0 + z1) / 2, g);
+      };
+      if (bw > 0.8) wall(bx - 0.03, bx + 0.03, -hd, z - 0.8);
+      mbox(0.08, H - KAMOI, 0.8, M.darkWood, bx, KAMOI, z - 0.4, g);
+      const wc = new THREE.Group();
+      Pr.box(0.38, 0.4, 0.55, Pr.mat(0xf2f0ea, { roughness: 0.25 }), 0, 0, 0, wc);
+      Pr.box(0.38, 0.45, 0.18, Pr.mat(0xf2f0ea, { roughness: 0.25 }), 0, 0.4, -0.2, wc);
+      wc.position.set(sideSign * (hw - bw / 2), 0, -hd + 0.4);
+      wc.userData.solid = true;
+      if (bw > 0.8) g.add(wc);
+      const sink = Q.sinkCounter(1);
+      sink.scale.setScalar(0.8);
+      sink.position.set(sideSign * (hw - 0.3), 0, z - 0.45);
+      sink.rotation.y = -sideSign * Math.PI / 2;
+      if (bw > 0.8) g.add(sink);
+      // 前室と本間のしきり：ふすまを左右に開けてある
+      const open = 0.9;
+      wall(-hw, -open, z - 0.04, z + 0.04);
+      wall(open, hw, z - 0.04, z + 0.04);
+      mbox(open * 2, 0.08, 0.1, M.darkWood, 0, KAMOI, z, g);
+      const rm = new THREE.Mesh(new THREE.PlaneGeometry(open * 2 - 0.06, H - KAMOI - 0.12), M.ranma);
+      rm.position.set(0, KAMOI + 0.08 + (H - KAMOI - 0.12) / 2, z);
+      g.add(rm);
+      for (const sx of [-1, 1]) {
+        const f = shojiPanel(0.85, KAMOI - 0.03, M.washiWarm, { koshi: 0.25 });
+        f.position.set(sx * (open + 0.45), 0.02, z + 0.07);
+        g.add(f);
+      }
+      resetCorners();
+      c.zFront = z;
+    },
+
+    // 押入れ：ふすま 2 枚。中に隠れられる
+    oshiire(side, t = 0) {
+      const o = new THREE.Group();
+      Pr.box(1.8, KAMOI, 0.85, M.darkWood, 0, 0, -0.43, o);
+      Pr.box(1.72, 0.04, 0.8, M.agedWood, 0, 0.8, -0.43, o);
+      for (const x of [-0.44, 0.44]) {
+        const f = fusumaPanel(0.88, KAMOI - 0.06);
+        f.position.set(x, 0.03, 0.02 + (x > 0 ? 0.025 : 0));
+        o.add(f);
+      }
+      o.userData.hide = 'oshiire';
+      c.wall(o, side, t, 0.9, true);
+      return o;
+    },
+
     // 客室の奥の広縁：板の間・開けた障子・いすとテーブル・窓
     hiroen(depth = 1.4) {
       back = depth;
@@ -441,9 +525,7 @@ function makeCtx(g, hw, hd, R, world, extraDoors = []) {
       cs.position.set(hw > 2.6 ? hw * 0.35 : 0, 0, hd - depth / 2);
       cs.userData.solid = true;
       g.add(cs);
-      const ci2 = 0.75;
-      corners = R.shuffle([[-hw + ci2, z - ci2], [hw - ci2, z - ci2], [-hw + ci2, -hd + ci2 + 0.6], [hw - ci2, -hd + ci2 + 0.6]]);
-      c.corners = corners;
+      resetCorners();
       c.hd2 = z;
     },
     doors: world.doors, interactables: world.interactables, updaters: world.updaters,

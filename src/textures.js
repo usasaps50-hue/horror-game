@@ -449,7 +449,32 @@ export async function initTextures() {
   T.ranma = toTexture(cutDark(imgs.ranma), 1, 1, false);
   T.ceilingImg = toTexture(imgs.wood_floor, 2.4, 2.4);
 
+  // 客室の階の廊下のじゅうたん（えんじ色に小さな菱の柄）
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 256;
+  const cg = cv.getContext('2d');
+  cg.fillStyle = '#5a1418';
+  cg.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 6000; i++) {
+    cg.fillStyle = `rgba(${Math.random() < 0.5 ? '20,0,0' : '120,40,40'},${Math.random() * 0.25})`;
+    cg.fillRect(Math.random() * 256, Math.random() * 256, 2, 2);
+  }
+  cg.strokeStyle = 'rgba(190,140,70,0.35)';
+  cg.lineWidth = 2;
+  for (let y = 0; y < 256; y += 64)
+    for (let x = 0; x < 256; x += 64) {
+      cg.beginPath();
+      cg.moveTo(x + 32, y + 18);
+      cg.lineTo(x + 46, y + 32);
+      cg.lineTo(x + 32, y + 46);
+      cg.lineTo(x + 18, y + 32);
+      cg.closePath();
+      cg.stroke();
+    }
+  T.carpet = toTexture(cv, 0.8);
+
   Object.assign(M, {
+    carpet: std({ map: T.carpet, roughness: 0.95 }),
     tatami: std({ map: T.tatamiImg, roughness: 0.85 }),
     woodFloor: std({ map: T.woodImg, roughness: 0.32, metalness: 0.05 }),
     plaster: std({ map: T.plasterImg, color: 0xb0a492, roughness: 0.95 }),
