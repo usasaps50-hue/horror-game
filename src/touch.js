@@ -3,7 +3,7 @@ export const IS_TOUCH = matchMedia('(pointer: coarse)').matches || 'ontouchstart
 
 const RADIUS = 55; // スティックの半径（px）
 
-export function setupTouch({ onLook, onAction, onFlash, onMap, onPause, onRun }) {
+export function setupTouch({ onLook, onAction, onFlash, onMap, onPause, onRun, onCrouch }) {
   const state = { x: 0, y: 0, run: false };
 
   const ui = document.createElement('div');
@@ -13,6 +13,7 @@ export function setupTouch({ onLook, onAction, onFlash, onMap, onPause, onRun })
     <div id="t-stick"><div id="t-knob"></div></div>
     <button id="t-action" class="t-btn">　</button>
     <button id="t-run" class="t-btn small">走る</button>
+    <button id="t-crouch" class="t-btn small">しゃがむ</button>
     <button id="t-flash" class="t-btn small">灯り</button>
     <button id="t-map" class="t-btn small">地図</button>
     <button id="t-pause" class="t-btn small">Ⅱ</button>
@@ -22,6 +23,7 @@ export function setupTouch({ onLook, onAction, onFlash, onMap, onPause, onRun })
   const knob = ui.querySelector('#t-knob');
   const action = ui.querySelector('#t-action');
   const runBtn = ui.querySelector('#t-run');
+  const crouchBtn = ui.querySelector('#t-crouch');
 
   let moveId = null, lookId = null;
   let base = { x: 0, y: 0 }, last = { x: 0, y: 0 };
@@ -89,11 +91,19 @@ export function setupTouch({ onLook, onAction, onFlash, onMap, onPause, onRun })
     runBtn.classList.toggle('on', state.run);
     onRun?.(state.run);
   });
+  tap(crouchBtn, () => onCrouch?.());
 
   return {
     state,
     show(v) {
       ui.classList.toggle('show', v);
+    },
+    setRun(v) {
+      state.run = v;
+      runBtn.classList.toggle('on', v);
+    },
+    setCrouch(v) {
+      crouchBtn.classList.toggle('on', v);
     },
     setAction(label) {
       action.textContent = label || '　';

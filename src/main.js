@@ -123,6 +123,11 @@ const seeker = new Seeker({
   world, nav: new Nav(world), scene, model: seekerModel, clips, audio, R,
   onCatch: () => die(),
   onSay: (t) => subtitle(t),
+  // 隠れ場所を開けられた：外に出されて、少しだけ逃げる間がある
+  onReveal: () => {
+    if (hiding) exitHide(true);
+    toast('みつかった……！　にげて！', 1600);
+  },
 });
 let gameStarted = false;
 let seekerHead = seekerModel;
@@ -142,7 +147,10 @@ document.getElementById('seed').textContent = `seed ${seed}`;
 // ---------- プレイヤー ----------
 // 小学六年生の目の高さ
 const EYE = 1.28;
+const CROUCH_EYE = 0.82;
 const RADIUS = 0.22;
+let eye = EYE;
+let crouch = false;
 let floor = world.start.floor;
 let groundY = floor * FH;
 camera.position.copy(world.start.pos).setY(groundY + EYE);
@@ -191,12 +199,14 @@ const touch = IS_TOUCH
       onFlash: toggleFlash,
       onMap: () => minimap.classList.toggle('hidden'),
       onPause: () => setLocked(false),
+      onRun: (v) => v && setCrouch(false),
+      onCrouch: () => setCrouch(!crouch),
     })
   : null;
 if (IS_TOUCH) {
   document.body.classList.add('touch');
   document.querySelector('label[for=s-sens]').textContent = '視点の感度';
-  document.querySelector('#overlay .keys').innerHTML = '左手でスティックを動かして移動 ／ 右手で画面をなでて見回す<br>右下のボタンで、戸を開ける・閉める・隠れる ／ 「走る」で走る';
+  document.querySelector('#overlay .keys').innerHTML = '左手でスティックを動かして移動（少しだけ倒すと、そっと歩く） ／ 右手で画面をなでて見回す<br>右下のボタンで、戸を開ける・閉める・隠れる ／ 「走る」で走る ／ 「しゃがむ」で静かに動く';
 }
 document.addEventListener('mousemove', (e) => {
   if (!locked) return;
@@ -242,6 +252,31 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyE') interact();
   if (e.code === 'KeyF') toggleFlash();
   if (e.code === 'KeyM') minimap.classList.toggle('hidden');
+  if (e.code === 'KeyC') setCrouch(!crouch);
+});
+
+// ---------- しゃがむ（ゆっくり・静かに歩く） ----------
+const stanceEl = document.getElementById('stance');
+function setCrouch(v) {
+  if (hiding || dead) v = false;
+  crouch = v;
+  stanceEl.classList.toggle('show', v);
+  touch?.setCrouch(v);
+  if (v) touch?.setRun(false);
+}
+
+// ---------- 物音（座敷童子に聞こえる） ----------
+const noiseEl = document.getElementById('noise');
+let noiseLevel = 0;
+let stepNoiseTimer = 0;
+function makeNoise(kind, radius, pos = camera.position, room = currentRoom) {
+  noiseLevel = Math.max(noiseLevel, Math.min(1, radius / 10));
+  if (!gameStarted || dead || radius <= 0) return;
+  seeker.hear({ kind, radius, pos: new THREE.Vector3(pos.x, floor * FH, pos.z), floor, room }, playerState());
+}
+const playerState = () => ({
+  pos: new THREE.Vector3(camera.position.x, groundY, camera.position.z),
+  floor, room: currentRoom, hidden: !!hiding, spot: hiding?.spot ?? null, crouch,
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
 
@@ -311,7 +346,11 @@ function findHideSpot() {
   return best;
 }
 function enterHide(s) {
-  hiding = { spot: s, back: { x: camera.position.x, z: camera.position.z, yaw } };
+  // しゃがんだまま、そっと入ると音が小さい
+  makeNoise('hide', crouch ? 3 : 6.5, s.pos, s.room);
+  seeker.onPlayerHide(s);
+  hiding = { spot: s, back: { x: camera.position.x, z: camera.position.z, yaw }, quiet: crouch };
+  setCrouch(false);
   const y = { futon: 0.22, locker: 1.25, chest: 0.4, oshiire: 1.15 }[s.type];
   // 押入れは戸の内側（奥）に入る
   const inset = s.type === 'oshiire' ? 0.45 : 0;
@@ -321,11 +360,16 @@ function enterHide(s) {
   hideEl.className = `show ${s.type}`;
   toast('じっとしていよう……　E で出る', 1800);
 }
-function exitHide() {
+function exitHide(silent = false) {
   const b = hiding.back;
-  camera.position.set(b.x, groundY + EYE, b.z);
+  const quiet = hiding.quiet;
+  camera.position.set(b.x, groundY + eye, b.z);
   yaw = b.yaw;
   hiding = null;
+  if (!silent) {
+    makeNoise('unhide', quiet ? 2 : 4);
+    if (quiet) setCrouch(true);
+  }
   hideEl.className = '';
 }
 
@@ -347,6 +391,7 @@ function interact() {
     if (c && overlaps(c, camera.position.x, camera.position.z, RADIUS)) return;
   }
   door.open = !door.open;
+  makeNoise('door', crouch ? 4.5 : 8); // しゃがんで、そっと開け閉めすると音が小さい
 }
 
 // ---------- 表示 ----------
@@ -373,7 +418,8 @@ let scare = null; // 見つかったときの演出の進み具合
 const deathEl = document.getElementById('death');
 function die() {
   dead = true;
-  if (hiding) exitHide();
+  if (hiding) exitHide(true);
+  setCrouch(false);
   scare = { t: -0.3 }; // まず一瞬、真っ暗になる
   const f0 = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
   seeker.obj.position.set(camera.position.x + f0.x * 1.8, groundY, camera.position.z + f0.z * 1.8);
@@ -421,6 +467,7 @@ function updateScare(dt) {
     scare = null;
     floor = world.start.floor;
     groundY = floor * FH;
+    eye = EYE;
     camera.position.copy(world.start.pos).setY(groundY + EYE);
     yaw = world.start.yaw;
     pitch = 0;
@@ -509,7 +556,8 @@ function update(dt) {
     const ts = touch?.state;
     const tMag = ts ? Math.hypot(ts.x, ts.y) : 0;
     const run = keys.has('ShiftLeft') || keys.has('ShiftRight') || (ts?.run && tMag > 0.2);
-    const speed = (run ? 3.3 : 1.7) * (tMag > 0 && !run ? Math.min(1, tMag * 1.3) : 1);
+    if (run && crouch) setCrouch(false);
+    const speed = (run ? 3.3 : crouch ? 0.95 : 1.7) * (tMag > 0 && !run ? Math.min(1, tMag * 1.3) : 1);
     let mx = 0, mz = 0;
     if (tMag > 0.12) {
       mx += fwd.x * -ts.y + right.x * ts.x;
@@ -526,14 +574,24 @@ function update(dt) {
       const p = camera.position;
       if (!blocked(p.x + mx, p.z)) p.x += mx;
       if (!blocked(p.x, p.z + mz)) p.z += mz;
-      bob += dt * (run ? 12 : 8);
+      bob += dt * (run ? 12 : crouch ? 5 : 8);
+      // 足音：走ると遠くまで聞こえる。しゃがみ・スティックを少しだけ倒すゆっくり歩きは、ほとんど音がしない
+      stepNoiseTimer -= dt;
+      if (stepNoiseTimer <= 0) {
+        stepNoiseTimer = 0.4;
+        makeNoise('step', run ? 10 : crouch ? 0 : speed < 1.15 ? 0.8 : 3.5);
+      }
     }
+    eye += ((crouch ? CROUCH_EYE : EYE) - eye) * Math.min(1, dt * 10);
     const gnd = groundAt(camera.position.x, camera.position.z);
     floor = gnd.floor;
     onStairs = gnd.stairs;
     groundY += (gnd.y - groundY) * Math.min(1, dt * 14);
-    camera.position.y = groundY + EYE + Math.sin(bob) * 0.02;
+    camera.position.y = groundY + eye + Math.sin(bob) * 0.02;
   }
+  noiseLevel = Math.max(0, noiseLevel - dt * 1.5);
+  noiseEl.style.opacity = (noiseLevel * 0.8).toFixed(2);
+  noiseEl.style.transform = `scale(${(1 + noiseLevel * 2.2).toFixed(2)})`;
 
   for (const d of world.doors) {
     const goal = d.open ? 1 : 0;
@@ -554,7 +612,7 @@ function update(dt) {
   mixer.update(dt);
   audio.updateListener(camera);
   if (gameStarted && !dead) {
-    seeker.update(dt, { pos: new THREE.Vector3(camera.position.x, groundY, camera.position.z), floor, room: currentRoom, hidden: !!hiding });
+    seeker.update(dt, playerState());
     // 近くにいると心臓の音
     heartTimer -= dt;
     const near = seeker.obj.visible && seeker.floor === floor ? seeker.pos.distanceTo(new THREE.Vector3(camera.position.x, groundY, camera.position.z)) : 99;
@@ -607,13 +665,17 @@ addEventListener('resize', () => {
 window.__game = {
   world, scene, camera, renderer, seed, settings, seeker, audio,
   get hiding() { return hiding; },
+  get crouch() { return crouch; },
+  setCrouch: (v) => setCrouch(v),
+  noise: (kind, r) => makeNoise(kind, r),
+  player: () => playerState(),
   hide: () => hideTarget && enterHide(hideTarget),
   start: () => { gameStarted = true; seeker.start(0.1); },
   get floor() { return floor; },
   setView(x, z, y, p = 0, f = floor) {
     floor = f;
     groundY = f * FH;
-    camera.position.set(x, groundY + EYE, z);
+    camera.position.set(x, groundY + eye, z);
     yaw = y;
     pitch = p;
   },
@@ -627,7 +689,7 @@ window.__game = {
     floor = gnd.floor;
     onStairs = gnd.stairs;
     groundY = gnd.y;
-    p.y = groundY + EYE;
+    p.y = groundY + eye;
     return [p.x.toFixed(2), p.z.toFixed(2), floor, groundY.toFixed(2)];
   },
   step: (dt = 0.016) => { update(dt); renderer.render(scene, camera); },
